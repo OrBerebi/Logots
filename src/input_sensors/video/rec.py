@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 # Configuration
-ESP32_CAM_URL = "http://192.168.68.118/capture"  # Replace with your ESP32-CAM's URL
+ESP32_CAM_URL = "http://192.168.68.100/capture"  # Replace with your ESP32-CAM's URL
 CSV_FILE = "stg_visual_data.csv"  # Output CSV file for black and white
 VIDEO_FILE = "stg_visual_data.m4v"  # Output video file (still .m4v, but black and white)
 FRAME_RATE = 5  # Target frame rate in frames per second

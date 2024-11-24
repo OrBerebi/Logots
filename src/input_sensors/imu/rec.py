@@ -1,19 +1,14 @@
-import serial
+import socket
 import time
 import csv
 from datetime import datetime
 
 # Configuration
-SERIAL_PORT = '/dev/tty.usbserial-110'  # Update with your Arduino's serial port (e.g., 'COM3' on Windows)
-BAUD_RATE = 1000000  # Serial communication baud rate
-RECORD_DURATION = 10  # Duration to record in seconds
-FPS = 5  # Frames per second
+ESP32_IP = '192.168.68.111'  # Update with your ESP32's IP address
+ESP32_PORT = 12345           # Must match the port defined in the ESP32 code
+RECORD_DURATION = 10         # Duration to record in seconds
+FPS = 5                      # Frames per second
 CSV_FILE = 'stg_imu_data.csv'  # Output CSV file
-
-# Open the serial port
-print(f"Opening the serial port and recording IMU data for {RECORD_DURATION} seconds...")
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-time.sleep(2)  # Wait for the Arduino to initialize
 
 # Prepare to collect data
 yaw_data = []
@@ -22,7 +17,7 @@ roll_data = []
 timestamps = []
 start_time = time.time()
 
-# Function to parse yaw, pitch, and roll data from the serial input
+# Function to parse yaw, pitch, and roll data from the incoming line
 def parse_imu_data(line):
     # Expecting a line formatted as: y, p, r
     values = line.strip().split(",")
@@ -37,21 +32,39 @@ def parse_imu_data(line):
     except ValueError:
         return None
 
+# Connect to the ESP32
+print(f"Connecting to ESP32 at {ESP32_IP}:{ESP32_PORT}...")
+try:
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((ESP32_IP, ESP32_PORT))
+    print("Connection established!")
+except Exception as e:
+    print(f"Error connecting to ESP32: {e}")
+    exit()
+
 # Read IMU data for the specified duration
-while time.time() - start_time < RECORD_DURATION:
-    if ser.in_waiting > 0:
-        line = ser.readline().decode('utf-8').strip()
-        imu_data_line = parse_imu_data(line)
-        if imu_data_line:
-            timestamps.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
-            yaw_data.append(imu_data_line[0])
-            pitch_data.append(imu_data_line[1])
-            roll_data.append(imu_data_line[2])
+print(f"Recording IMU data for {RECORD_DURATION} seconds...")
+try:
+    while time.time() - start_time < RECORD_DURATION:
+        # Receive data from the ESP32
+        data = client_socket.recv(1024).decode('utf-8')
+        for line in data.split("\n"):
+            imu_data_line = parse_imu_data(line.strip())
+            if imu_data_line:
+                timestamps.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
+                yaw_data.append(imu_data_line[0])
+                pitch_data.append(imu_data_line[1])
+                roll_data.append(imu_data_line[2])
+except Exception as e:
+    print(f"Error during data collection: {e}")
+finally:
+    # Close the socket connection
+    client_socket.close()
 
 # Calculate the true sample rate (samples per second)
 elapsed_time = time.time() - start_time
 true_sample_rate = len(yaw_data) / elapsed_time
-samples_per_frame = int(true_sample_rate / FPS)
+samples_per_frame = max(1, int(true_sample_rate / FPS))  # Ensure at least 1 sample per frame
 
 # Group data into frames
 frames = []
@@ -72,6 +85,3 @@ with open(CSV_FILE, mode='w', newline='') as file:
 # Output the true sample rate
 print(f"Data collection finished. True sample rate: {true_sample_rate:.2f} Hz")
 print(f"Data saved to '{CSV_FILE}'.")
-
-# Close the serial connection
-ser.close()

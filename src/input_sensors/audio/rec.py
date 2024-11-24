@@ -1,4 +1,4 @@
-import serial
+import socket
 import time
 import numpy as np
 from scipy.io.wavfile import write
@@ -6,23 +6,27 @@ import csv
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-
 # Configuration
-SERIAL_PORT = '/dev/cu.usbserial-10'  # Update with your Arduino's serial port (e.g., 'COM3' on Windows)
-BAUD_RATE = 1000000  # Match with Arduino's serial baud rate
-RECORD_DURATION = 10  # Duration to record in seconds
+ESP32_IP = '192.168.68.222'  # Update with your ESP32's IP address
+ESP32_PORT = 12345           # Must match the port in your ESP32 code
+RECORD_DURATION = 10         # Duration to record in seconds
+sample_rate = int(8e3)       # Audio sampling rate, defined on the ESP32
+
 WAV_FILE = 'audio_data.wav'  # Output WAV file
 CSV_FILE = 'stg_audio_data.csv'  # Output CSV file
-FPS = 5  # Frames per second
+FPS = 5                      # Frames per second
 
+print(f"Connecting to ESP32 at {ESP32_IP}:{ESP32_PORT} and recording for {RECORD_DURATION} seconds...")
 
-print(f"Opening the serial port and recording for {RECORD_DURATION} seconds...")
+# Connect to the ESP32 via TCP
+try:
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((ESP32_IP, ESP32_PORT))
+    print("Connection established!")
+except Exception as e:
+    print(f"Error connecting to ESP32: {e}")
+    exit()
 
-# Open the serial port
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-time.sleep(2)  # Wait for the Arduino to initialize
-
-print("Start!")
 # Prepare to collect samples
 samples = []
 timestamps = []  # To store timestamps for each sample
@@ -30,30 +34,35 @@ timestamps = []  # To store timestamps for each sample
 start_time = time.time()
 
 # Read audio data for the specified duration
-while time.time() - start_time < RECORD_DURATION:
-    if ser.in_waiting > 0:
-        line = ser.readline().decode('utf-8').strip()  # Read a line from the serial port
-        try:
-            sample_value = int(line)  # Convert the CSV value to an integer
-            samples.append(sample_value)
-            timestamps.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))  # Add timestamp
-        except ValueError:
-            # Skip lines that cannot be converted to integers
-            continue
+print("Start!")
+try:
+    while time.time() - start_time < RECORD_DURATION:
+        # Receive data from the ESP32
+        data = client_socket.recv(1024)  # Buffer size of 1024 bytes
+        if data:
+            # Assume the ESP32 sends 16-bit PCM audio data as raw bytes
+            audio_samples = np.frombuffer(data, dtype=np.int16)
+            samples.extend(audio_samples)
+            timestamps.extend(
+                [datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')] * len(audio_samples)
+            )  # Timestamp for each sample
+except Exception as e:
+    print(f"Error during data collection: {e}")
+finally:
+    # Close the socket connection
+    client_socket.close()
 
 # Estimate the sample rate
 elapsed_time = time.time() - start_time
 
-# Close the serial connection
-ser.close()
-
 # Convert samples to a numpy array
 audio_data = np.array(samples, dtype=np.int16)
-sample_rate = len(samples) / elapsed_time
+#sample_rate = len(samples) / elapsed_time
 
 # Calculate the frame duration in terms of samples
 samples_per_frame = int(sample_rate / FPS)
-sample_rate = int(sample_rate)
+#sample_rate = int(sample_rate)
+
 
 # Normalize the audio data to the full 16-bit range
 max_amplitude = np.max(np.abs(audio_data))  # Find the maximum absolute value in the audio data
@@ -81,12 +90,14 @@ write(WAV_FILE, sample_rate, audio_data)
 print(f"Recording finished. Estimated sample rate: {sample_rate} Hz")
 print(f"Data saved to '{CSV_FILE}' and audio exported to '{WAV_FILE}'.")
 
-# Plot the audio waveform
-plt.figure(figsize=(10, 4))
-time_axis = np.arange(len(audio_data)) / sample_rate
-plt.plot(time_axis, audio_data)
-plt.title('Audio Signal')
-plt.xlabel('Time [s]')
-plt.ylabel('Amplitude')
-plt.grid(True)
-plt.show()
+## Plot the audio waveform
+#plt.figure(figsize=(10, 4))
+#time_axis = np.arange(len(audio_data)) / sample_rate
+#plt.plot(time_axis, audio_data)
+#plt.title('Audio Signal')
+#plt.xlabel('Time [s]')
+#plt.ylabel('Amplitude')
+#plt.grid(True)
+#plt.show()
+
+
