@@ -11,7 +11,7 @@ ESP32_CAM_URL = "http://192.168.68.100/capture"  # Replace with your ESP32-CAM's
 CSV_FILE = "stg_visual_data.csv"  # Output CSV file for black and white
 VIDEO_FILE = "stg_visual_data.m4v"  # Output video file (still .m4v, but black and white)
 FRAME_RATE = 5  # Target frame rate in frames per second
-RECORD_DURATION = 10  # Duration to record in seconds
+RECORD_DURATION = 20  # Duration to record in seconds
 
 # Variables to track frame count and sample index
 frame_count = 0

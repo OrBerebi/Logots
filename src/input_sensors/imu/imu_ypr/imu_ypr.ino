@@ -56,7 +56,7 @@ void setup() {
   float az = imu.accelZ() / normAccel;
 
   pitchOffset = atan2(-ax, sqrt(ay * ay + az * az));
-  rollOffset = atan2(ay, az);
+  rollOffset = atan2(ay, -az);
 
   float mx = imu.magX();
   float my = imu.magY();
@@ -71,7 +71,6 @@ void setup() {
   rollOffset *= 180.0 / M_PI;
   yawOffset *= 180.0 / M_PI;
   if (yawOffset < 0) yawOffset += 360;
-
   previousTime = millis();
 }
 
@@ -106,7 +105,10 @@ void loop() {
     float az = imu.accelZ() / normAccel;
 
     float pitch = atan2(-ax, sqrt(ay * ay + az * az));
-    float roll = atan2(ay, az);
+    float roll = atan2(ay, -az);
+
+
+    
 
     float mx = imu.magX();
     float my = imu.magY();
@@ -127,9 +129,17 @@ void loop() {
     pitch *= 180.0 / M_PI;
     roll *= 180.0 / M_PI;
 
+    //if (roll < -180) {
+    //roll += 360;
+    //} else if (roll > 180) {
+    //roll -= 360;
+    //}
+
     yawFiltered -= yawOffset;
     pitch -= pitchOffset;
     roll -= rollOffset;
+
+    
 
     if (yawFiltered < 0) yawFiltered += 360;
     if (yawFiltered >= 360) yawFiltered -= 360;
@@ -137,6 +147,11 @@ void loop() {
     // Send yaw, pitch, roll over Wi-Fi
     String yprData = String(yawFiltered, 2) + "," + String(pitch, 2) + "," + String(roll, 2) + "\n";
     client.print(yprData);
+
+    
+    //Serial.println(yprData);
+    
+    //Serial.println(yprData);
 
     delay(10); // Delay for stability
   }

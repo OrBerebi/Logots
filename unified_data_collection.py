@@ -9,25 +9,25 @@ from datetime import datetime
 import threading
 
 # Configuration
-RECORD_DURATION = 10  # Duration to record in seconds
+RECORD_DURATION = 40  # Duration to record in seconds
 FPS = 5               # Frames per second
 
 # Audio Configuration
 AUDIO_ESP32_IP = '192.168.68.222'
 AUDIO_ESP32_PORT = 12345
-AUDIO_WAV_FILE = './recordings/audio_data.wav'
-AUDIO_CSV_FILE = './recordings/stg_audio_data.csv'
+AUDIO_WAV_FILE = './recordings/12_02_25-imu-tests2/audio_data.wav'
+AUDIO_CSV_FILE = './recordings/12_02_25-imu-tests2/stg_audio_data.csv'
 AUDIO_SAMPLE_RATE = 8000  # Audio sampling rate defined on ESP32
 
 # IMU Configuration
 IMU_ESP32_IP = '192.168.68.111'
 IMU_ESP32_PORT = 12345
-IMU_CSV_FILE = './recordings/stg_imu_data.csv'
+IMU_CSV_FILE = './recordings/12_02_25-imu-tests2/stg_imu_data.csv'
 
 # Video Configuration
 VIDEO_ESP32_CAM_URL = "http://192.168.68.100/capture"
-VIDEO_CSV_FILE = "./recordings/stg_visual_data.csv"
-VIDEO_FILE = "./recordings/stg_visual_data.m4v"
+VIDEO_CSV_FILE = "./recordings/12_02_25-imu-tests2/stg_visual_data.csv"
+VIDEO_FILE = "./recordings/12_02_25-imu-tests2/stg_visual_data.m4v"
 
 
 # Function to collect audio data

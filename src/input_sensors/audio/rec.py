@@ -9,7 +9,7 @@ from datetime import datetime
 # Configuration
 ESP32_IP = '192.168.68.222'  # Update with your ESP32's IP address
 ESP32_PORT = 12345           # Must match the port in your ESP32 code
-RECORD_DURATION = 10         # Duration to record in seconds
+RECORD_DURATION = 20         # Duration to record in seconds
 sample_rate = int(8e3)       # Audio sampling rate, defined on the ESP32
 
 WAV_FILE = 'audio_data.wav'  # Output WAV file

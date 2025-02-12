@@ -6,7 +6,7 @@ from datetime import datetime
 # Configuration
 ESP32_IP = '192.168.68.111'  # Update with your ESP32's IP address
 ESP32_PORT = 12345           # Must match the port defined in the ESP32 code
-RECORD_DURATION = 10         # Duration to record in seconds
+RECORD_DURATION = 20         # Duration to record in seconds
 FPS = 5                      # Frames per second
 CSV_FILE = 'stg_imu_data.csv'  # Output CSV file
 
