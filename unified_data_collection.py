@@ -9,7 +9,7 @@ from datetime import datetime
 import threading
 
 # Configuration
-RECORD_DURATION = 40  # Duration to record in seconds
+RECORD_DURATION = 20  # Duration to record in seconds
 FPS = 5               # Frames per second
 
 # Audio Configuration

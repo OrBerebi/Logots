@@ -129,11 +129,6 @@ void loop() {
     pitch *= 180.0 / M_PI;
     roll *= 180.0 / M_PI;
 
-    //if (roll < -180) {
-    //roll += 360;
-    //} else if (roll > 180) {
-    //roll -= 360;
-    //}
 
     yawFiltered -= yawOffset;
     pitch -= pitchOffset;
