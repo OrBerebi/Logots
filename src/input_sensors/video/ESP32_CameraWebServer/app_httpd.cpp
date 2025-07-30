@@ -736,7 +736,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
 #if CONFIG_LED_ILLUMINATOR_ENABLED
   isStreaming = false;
-  enable_led(false);
+  enable_led(true);
 #endif
 
   return res;

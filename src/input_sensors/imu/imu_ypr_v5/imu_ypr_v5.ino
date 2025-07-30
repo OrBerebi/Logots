@@ -21,8 +21,8 @@ float calAccelX, calAccelY, calAccelZ;
 
 
 // Wi-Fi credentials
-const char *ssid = "Mushkins";
-const char *password = "besserbros";
+const char *ssid = "self.object";
+const char *password = "FRTZ35%%grmnySF";
 
 WiFiServer wifiServer(12345); // Create a TCP server on port 12345
 WiFiClient client;

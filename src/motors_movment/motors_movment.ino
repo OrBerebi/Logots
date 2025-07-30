@@ -9,8 +9,10 @@ void setup() {
   Serial.println("Robot iterative movement routine");
 
   // Initial setup: stop both motors
-  motorLeft.setSpeed(90);  // Set speed (0-255)
-  motorRight.setSpeed(75);
+  //motorLeft.setSpeed(90);  // Set speed (0-255)
+  //motorRight.setSpeed(75);
+  motorLeft.setSpeed(190);  // Set speed (0-255)
+  motorRight.setSpeed(175);
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
 }
@@ -20,27 +22,36 @@ void loop() {
   Serial.println("Pausing");
   motorLeft.run(RELEASE);
   motorRight.run(RELEASE);
-  delay(10000); // 0.5 second pause before repeating
+  delay(5000); // 0.5 second pause before repeating
 
   // Step 1: Move forward for 3 seconds
-  //Serial.println("Moving forward");
-  //motorLeft.run(BACKWARD); // Left motor moves backward
-  //motorRight.run(FORWARD); // Right motor moves forward
-  //delay(7000); // 3 seconds
+  Serial.println("Moving forward");
+  motorLeft.run(BACKWARD); // Left motor moves backward
+  motorRight.run(FORWARD); // Right motor moves forward
+  delay(4000); // 3 seconds
 
-    // Step 3: Move backward for 2 seconds
-  //Serial.println("Moving backward");
-  //motorLeft.run(FORWARD); // Left motor moves forward
-  //motorRight.run(BACKWARD); // Right motor moves backward
+  Serial.println("Pausing");
+  motorLeft.run(RELEASE);
+  motorRight.run(RELEASE);
+  delay(2000); // 0.5 second pause before repeating
 
-  //delay(7000); // 2 seconds
+  // Step 3: Move backward for 2 seconds
+  Serial.println("Moving backward");
+  motorLeft.run(FORWARD); // Left motor moves forward
+  motorRight.run(BACKWARD); // Right motor moves backward
+  delay(4000); // 2 seconds
+
+  Serial.println("Pausing");
+  motorLeft.run(RELEASE);
+  motorRight.run(RELEASE);
+  delay(2000); // 0.5 second pause before repeating
 
 
   // Step 2: Rotate left for 0.3 seconds
-  Serial.println("Rotating left");
-  motorLeft.run(FORWARD);
-  motorRight.run(FORWARD);
-  delay(3000); // 0.3 seconds
+  //Serial.println("Rotating left");
+  //motorLeft.run(FORWARD);
+  //motorRight.run(FORWARD);
+  //delay(3000); // 0.3 seconds
 
   // Step 2: Rotate left for 0.3 seconds
   //Serial.println("Rotating left");

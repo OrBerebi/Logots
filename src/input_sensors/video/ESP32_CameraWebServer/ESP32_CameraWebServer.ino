@@ -28,8 +28,8 @@ int16_t sBuffer[bufferLen];
 // ===========================
 // Enter your WiFi credentials
 // ===========================
-const char *ssid = "Mushkins";
-const char *password = "besserbros";
+const char *ssid = "self.object";
+const char *password = "FRTZ35%%grmnySF";
 
 void startCameraServer();
 void setupLedFlash(int pin);
@@ -61,7 +61,8 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   //config.frame_size = FRAMESIZE_96X96;
-  config.frame_size = FRAMESIZE_UXGA;
+  //config.frame_size = FRAMESIZE_UXGA;
+  //config.frame_size = FRAMESIZE_SVGA;
   //config.pixel_format = PIXFORMAT_GRAYSCALE;  // for BW streaming
   config.pixel_format = PIXFORMAT_JPEG;  // for streaming
   //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
@@ -97,6 +98,9 @@ void setup() {
 //  pinMode(14, INPUT_PULLUP);
 //#endif
 
+// Always force SVGA before init
+config.frame_size = FRAMESIZE_SVGA;
+
   // camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
@@ -113,7 +117,8 @@ void setup() {
   }
   // drop down frame size for higher initial frame rate
   if (config.pixel_format == PIXFORMAT_JPEG) {
-    s->set_framesize(s, FRAMESIZE_96X96);
+    //s->set_framesize(s, FRAMESIZE_96X96);
+    //s->set_framesize(s, FRAMESIZE_SVGA);
     //s->set_framesize(s, FRAMESIZE_QVGA);
     //config.frame_size = FRAMESIZE_96X96;
   }

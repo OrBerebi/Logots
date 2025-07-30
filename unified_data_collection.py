@@ -13,21 +13,28 @@ RECORD_DURATION = 20  # Duration to record in seconds
 FPS = 5               # Frames per second
 
 # Audio Configuration
-AUDIO_ESP32_IP = '192.168.68.222'
+#AUDIO_ESP32_IP = '192.168.68.222' # Darab's bot
+AUDIO_ESP32_IP = '192.168.68.117'  # Aspha's bot
 AUDIO_ESP32_PORT = 12345
-AUDIO_WAV_FILE = './recordings/12_02_25-imu-tests2/audio_data.wav'
-AUDIO_CSV_FILE = './recordings/12_02_25-imu-tests2/stg_audio_data.csv'
+AUDIO_WAV_FILE = './recordings/audio_data.wav'
+AUDIO_CSV_FILE = './recordings/stg_audio_data.csv'
 AUDIO_SAMPLE_RATE = 8000  # Audio sampling rate defined on ESP32
 
 # IMU Configuration
 IMU_ESP32_IP = '192.168.68.111'
 IMU_ESP32_PORT = 12345
-IMU_CSV_FILE = './recordings/12_02_25-imu-tests2/stg_imu_data.csv'
+IMU_CSV_FILE = './recordings/stg_imu_data.csv'
+
+# Motors Configuration
+# MOTORS_ESP32_IP = '192.168.68.123' # Darab's bot
+MOTORS_ESP32_IP = '192.168.68.118'   # Aspha's bot
+MOTORS_ESP32_PORT = 12345
+MOTORS_CSV_FILE = './recordings/stg_motor_data.csv'
 
 # Video Configuration
-VIDEO_ESP32_CAM_URL = "http://192.168.68.100/capture"
-VIDEO_CSV_FILE = "./recordings/12_02_25-imu-tests2/stg_visual_data.csv"
-VIDEO_FILE = "./recordings/12_02_25-imu-tests2/stg_visual_data.m4v"
+VIDEO_ESP32_CAM_URL = "http://192.168.68.104/capture"
+VIDEO_CSV_FILE = "./recordings/stg_visual_data.csv"
+VIDEO_FILE = "./recordings/stg_visual_data.m4v"
 
 
 # Function to collect audio data
@@ -121,6 +128,33 @@ def collect_imu():
     finally:
         client_socket.close()
 
+# Function to send motor control data
+def send_motor():
+    print("Starting motor control transmission...")
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((MOTORS_ESP32_IP, MOTORS_ESP32_PORT))
+        print("Connected to motor control ESP32.")
+
+        with open(MOTORS_CSV_FILE, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                frame_id = row['frame_id']
+                timestamp = row['timestamp']
+                left_pwm = row['left_pwm']
+                right_pwm = row['right_pwm']
+                arm_angle = row['arm_angle']
+
+                message = f"{frame_id},{timestamp},{left_pwm},{right_pwm},{arm_angle}\n"
+                client_socket.sendall(message.encode('utf-8'))
+                time.sleep(1 / FPS)  # simulate real-time streaming
+        print("Motor control data sent successfully.")
+
+    except Exception as e:
+        print(f"Error in motor control transmission: {e}")
+    finally:
+        client_socket.close()
+        print("Motor control socket closed.")
 
 # Function to collect video data
 def collect_video():
@@ -165,17 +199,21 @@ def collect_video():
 if __name__ == "__main__":
     # Create threads for each collection task
     audio_thread = threading.Thread(target=collect_audio)
-    imu_thread = threading.Thread(target=collect_imu)
+    imu_thread   = threading.Thread(target=collect_imu)
     video_thread = threading.Thread(target=collect_video)
+    motor_thread = threading.Thread(target=send_motor)
+
 
     # Start threads
-    audio_thread.start()
-    imu_thread.start()
-    video_thread.start()
+    #audio_thread.start()
+    #imu_thread.start()
+    motor_thread.start()
+    #video_thread.start()
 
     # Wait for all threads to complete
-    audio_thread.join()
-    imu_thread.join()
-    video_thread.join()
+    #audio_thread.join()
+    #imu_thread.join()
+    motor_thread.join()
+    #video_thread.join()
 
     print("Data collection complete for all sources!")
