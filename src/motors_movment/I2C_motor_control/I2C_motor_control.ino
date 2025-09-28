@@ -2,42 +2,38 @@
 #include <AFMotor.h>
 #include <Servo.h>
 
-// Motor definitions
-AF_DCMotor motorLeft(2);   // Motor connected to M2
-AF_DCMotor motorRight(3);  // Motor connected to M3
+// Motors
+AF_DCMotor motorLeft(3);
+AF_DCMotor motorRight(4);
 
-Servo armServo;            // Servo for arm control
-Servo armServo2;           // Duplicate servo
-const int SERVO_PIN = 10;  // Original servo pin
-const int SERVO2_PIN = 9;  // Duplicate servo pin
+// Servos
+Servo armServo;
+Servo armServo2;
+const int SERVO_PIN = 10;
+const int SERVO2_PIN = 9;
 
-// Buffer to hold incoming I2C data
-char i2cBuffer[33];  // 32-byte I2C limit + null terminator
+// I2C buffer
+#define I2C_BUFFER_SIZE 32
+char i2cBuffer[I2C_BUFFER_SIZE + 1]; // +1 for null terminator
 byte bufferIndex = 0;
 
 void setup() {
   Serial.begin(9600);
   Serial.println("Ready to receive motor commands over I2C.");
 
-  // Motor setup
-  motorLeft.setSpeed(0);
-  motorRight.setSpeed(0);
-  motorLeft.run(RELEASE);
-  motorRight.run(RELEASE);
+  motorLeft.setSpeed(0); motorRight.setSpeed(0);
+  motorLeft.run(RELEASE); motorRight.run(RELEASE);
 
-  // Servo setup
   armServo.attach(SERVO_PIN);
   armServo2.attach(SERVO2_PIN);
-  armServo.write(90);  // Neutral position
-  armServo2.write(90); // Neutral position for second servo
+  armServo.write(90); armServo2.write(90);
 
-  // I2C setup
-  Wire.begin(0x08); // I2C address must match ESP32 sender
+  Wire.begin(0x08); // Arduino I2C address
   Wire.onReceive(receiveEvent);
 }
 
 void loop() {
-  // Nothing needed here – logic handled in receiveEvent
+  // Nothing needed here
 }
 
 void receiveEvent(int bytesReceived) {
@@ -45,73 +41,45 @@ void receiveEvent(int bytesReceived) {
     char c = Wire.read();
 
     if (c == '\n') {
-      i2cBuffer[bufferIndex] = '\0'; // End current message
+      i2cBuffer[bufferIndex] = '\0'; // terminate string
       parseMessage(i2cBuffer);
-      bufferIndex = 0; // Reset for next message
-    } else if (bufferIndex < sizeof(i2cBuffer) - 1) {
-      i2cBuffer[bufferIndex++] = c;
+      bufferIndex = 0; // reset for next message
     } else {
-      // Overflow: discard and reset buffer
-      bufferIndex = 0;
-      Serial.println("I2C buffer overflow! Discarding message.");
+      if (bufferIndex < I2C_BUFFER_SIZE) {
+        i2cBuffer[bufferIndex++] = c;
+      } else {
+        // Overflow, discard current message
+        bufferIndex = 0;
+        Serial.println("I2C buffer overflow! Discarding message.");
+      }
     }
   }
 }
 
 void parseMessage(const char* msg) {
-  char buf[33];
-  strncpy(buf, msg, 32);
-  buf[32] = '\0';
-
-  char* token;
-  int index = 0;
-
-  int frame_id = 0;
-  float timestamp = 0;
-  int left_pwm = 0, right_pwm = 0, arm_angle = 0;
-
-  token = strtok(buf, ",");
-  while (token != NULL) {
-    switch (index) {
-      case 0: frame_id = atoi(token); break;
-      case 1: timestamp = atof(token); break;
-      case 2: left_pwm = atoi(token); break;
-      case 3: right_pwm = atoi(token); break;
-      case 4: arm_angle = atoi(token); break;
-    }
-    index++;
-    token = strtok(NULL, ",");
-  }
-
-  if (index == 5) {
-    Serial.print("Parsed: ");
-    Serial.print("L=");
-    Serial.print(left_pwm);
-    Serial.print(" R=");
-    Serial.print(right_pwm);
-    Serial.print(" Arm=");
-    Serial.println(arm_angle);
+  int left_pwm = 0, right_pwm = 0, arm_angle = 90;
+  
+  int n = sscanf(msg, "%d,%d,%d", &left_pwm, &right_pwm, &arm_angle);
+  if (n == 3) {
+    //Serial.print("Parsed: L="); Serial.print(left_pwm);
+    //Serial.print(" R="); Serial.print(right_pwm);
+    //Serial.print(" Arm="); Serial.println(arm_angle);
 
     controlMotor(motorLeft, left_pwm);
     controlMotor(motorRight, right_pwm);
 
-    // Move both servos
     arm_angle = constrain(arm_angle, 0, 180);
-    armServo.write((int)arm_angle);
-    armServo2.write((int)arm_angle);
+    armServo.write(arm_angle);
+    armServo2.write(arm_angle);
   } else {
-    Serial.println("Parsing error!");
+    Serial.println("Parsing error! Message ignored.");
   }
 }
 
 void controlMotor(AF_DCMotor& motor, int pwm) {
   pwm = constrain(pwm, -255, 255);
   motor.setSpeed(abs(pwm));
-  if (pwm > 0) {
-    motor.run(FORWARD);
-  } else if (pwm < 0) {
-    motor.run(BACKWARD);
-  } else {
-    motor.run(RELEASE);
-  }
+  if (pwm > 0) motor.run(FORWARD);
+  else if (pwm < 0) motor.run(BACKWARD);
+  else motor.run(RELEASE);
 }

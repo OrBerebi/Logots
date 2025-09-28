@@ -14,28 +14,35 @@ RECORD_DURATION = 20  # Duration to record in seconds
 FPS = 4               # Frames per second
 
 # Audio Configuration
-#AUDIO_ESP32_IP = '192.168.68.222' # Darab's bot
-AUDIO_ESP32_IP = '192.168.178.117'  # Aspha's bot
+AUDIO_ESP32_IP = '192.168.68.222' # Darab's bot
+#AUDIO_ESP32_IP = '192.168.178.117'  # Aspha's bot
+#AUDIO_ESP32_IP = '10.103.24.14'  # kinga's bot
+
 AUDIO_ESP32_PORT = 12345
 AUDIO_WAV_FILE = './recordings/audio_data.wav'
 AUDIO_CSV_FILE = './recordings/stg_audio_data.csv'
 AUDIO_SAMPLE_RATE = 8000  # Audio sampling rate defined on ESP32
 
 # IMU Configuration
-#IMU_ESP32_IP = '192.168.68.111' # Darab's bot
-IMU_ESP32_IP = '192.168.178.111' # Aspha's bot
+IMU_ESP32_IP = '192.168.68.111' # Darab's bot
+#IMU_ESP32_IP = '192.168.178.111' # Aspha's bot
+#IMU_ESP32_IP = '10.103.24.3' # kinga's bot
+
 IMU_ESP32_PORT = 12345
 IMU_CSV_FILE = './recordings/stg_imu_data.csv'
 
 # Motors Configuration
-# MOTORS_ESP32_IP = '192.168.68.123' # Darab's bot
-MOTORS_ESP32_IP = '192.168.178.118'   # Aspha's bot
+MOTORS_ESP32_IP = '192.168.68.123' # Darab's bot
+#MOTORS_ESP32_IP = '192.168.178.118'   # Aspha's bot
+
 MOTORS_ESP32_PORT = 12345
 MOTORS_CSV_FILE = './recordings/stg_motor_data.csv'
 
 # Video Configuration
-#VIDEO_ESP32_CAM_URL = "http://192.168.68.100/capture" # Darab's bot
-VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture" # Aspha's bot
+VIDEO_ESP32_CAM_URL = "http://192.168.68.100/capture" # Darab's bot
+#VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture" # Aspha's bot
+#VIDEO_ESP32_CAM_URL = "http://10.103.24.13/capture" # Aspha's bot
+
 VIDEO_CSV_FILE = "./recordings/stg_visual_data.csv"
 VIDEO_FILE = "./recordings/stg_visual_data.m4v"
 
@@ -64,12 +71,13 @@ def collect_audio():
         # Save audio data to files
         audio_data = np.array(samples, dtype=np.int16)
 
-        # Normalize the audio data to the full 16-bit range
-        max_amplitude = np.max(np.abs(audio_data))  # Find the maximum absolute value in the audio data
-        if max_amplitude > 0:  # Avoid division by zero
-            audio_data = (audio_data / max_amplitude) * 32767  # Scale to full range of int16
-            audio_data = audio_data.astype(np.int16)  # Ensure data type is int16
+        # # Normalize the audio data to the full 16-bit range
+        # max_amplitude = np.max(np.abs(audio_data))  # Find the maximum absolute value in the audio data
+        # if max_amplitude > 0:  # Avoid division by zero
+        #     audio_data = (audio_data / max_amplitude) * 32767  # Scale to full range of int16
+        #     audio_data = audio_data.astype(np.int16)  # Ensure data type is int16
 
+        audio_data = normalize_to_rms(audio_data, target_rms=10000) 
 
         write(AUDIO_WAV_FILE, AUDIO_SAMPLE_RATE, audio_data)
 
@@ -88,6 +96,17 @@ def collect_audio():
         print(f"Error during audio collection: {e}")
     finally:
         client_socket.close()
+
+
+def normalize_to_rms(audio_data, target_rms=10000):
+    """Normalize audio to a fixed RMS level."""
+    rms = np.sqrt(np.mean(audio_data.astype(np.float64)**2))
+    if rms > 0:
+        gain = target_rms / rms
+        audio_data = audio_data.astype(np.float64) * gain
+        # Clip to int16 range
+        audio_data = np.clip(audio_data, -32768, 32767).astype(np.int16)
+    return audio_data
 
 
 # Function to collect IMU data

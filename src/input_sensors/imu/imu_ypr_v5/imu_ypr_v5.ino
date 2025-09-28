@@ -7,7 +7,7 @@ MPU9250_asukiaaa imu;
 Madgwick filter;  // Madgwick filter instance
 
 // IMU sampling rate (Hz)
-const float imuRate = 25.0f;  // Adjust to your sensor's actual sampling rate
+const float imuRate = 50.0f;  // Adjust to your sensor's actual sampling rate
 unsigned long lastUpdate = 0;
 
 float calGyroX = 0, calGyroY = 0, calGyroZ = 0;
@@ -23,13 +23,15 @@ float calAccelX, calAccelY, calAccelZ;
 // Wi-Fi credentials
 const char *ssid = "self.object";
 const char *password = "FRTZ35%%grmnySF";
+//const char *ssid = "A-6-168";
+//const char *password = "62488453";
 
 WiFiServer wifiServer(12345); // Create a TCP server on port 12345
 WiFiClient client;
 
 
 void calibrateGyro() {
-    const int samples = 500;
+    const int samples = 2000;
     float sumX = 0, sumY = 0, sumZ = 0;
     
     for (int i = 0; i < samples; i++) {
@@ -47,22 +49,24 @@ void calibrateGyro() {
 }
 
 void calibrateOffsets() {
-    const int samples = 500;
+    const int samples = 2000;
     float sumPitch = 0, sumRoll = 0, sumYaw = 0;
     
     for (int i = 0; i < samples; i++) {
         imu.accelUpdate();
         imu.gyroUpdate();
 
-        float gx = imu.gyroX() - calGyroX;
-        float gy = imu.gyroY() - calGyroY;
-        float gz = imu.gyroZ() - calGyroZ;
-        
-        float ax = imu.accelX();
-        float ay = imu.accelY();
-        float az = imu.accelZ();
+        // GYRO
+        float gx = imu.gyroZ() - calGyroZ;   
+        float gy = imu.gyroX() - calGyroX;    
+        float gz = imu.gyroY() - calGyroY;   
 
-        filter.updateIMU(gx, gy, gz, ax, ay, -az);
+        // ACCEL
+        float ax = imu.accelZ();   
+        float ay = imu.accelX(); //pitch  
+        float az = imu.accelY();
+
+        filter.updateIMU(gx, gy, gz, ax, ay, az);
                 
         sumPitch += filter.getPitch();
         sumRoll += filter.getRoll();
@@ -80,22 +84,26 @@ void setup() {
   Wire.begin(16, 17); // SDA = GPIO 16, SCL = GPIO 17
   Serial.begin(115200);
 
-  // Initialize Wi-Fi
-  setupWiFi();
-
-  // Initialize the IMU
+  // Initialize the IMU first
   imu.setWire(&Wire);
   imu.beginAccel();
   imu.beginGyro();
   imu.beginMag();
-  
-  // Initialize the Madgwick filter with the IMU rate
+
+  // Initialize the Madgwick filter
   filter.begin(imuRate);
+  filter.setBeta(0.2f);   // <-- Added to match Code 1
+
+  // Calibrate gyro and offsets BEFORE Wi-Fi
   calibrateGyro();
   calibrateOffsets();
 
-  Serial.println("MPU9250 initialization complete");
+  Serial.println("MPU9250 initialization and calibration complete");
+
+  // Now initialize Wi-Fi
+  setupWiFi();
 }
+
 
 void loop() {
   // Check for new client connections
@@ -116,23 +124,19 @@ void loop() {
       imu.gyroUpdate();
       //imu.magUpdate();
       
-      float gx = imu.gyroX() - calGyroX;
-      float gy = imu.gyroY() - calGyroY;
-      float gz = imu.gyroZ() - calGyroZ;
-      
-      float ax = imu.accelX();
-      float ay = imu.accelY();
-      float az = imu.accelZ();
-      
-      //float mx = imu.magX();
-      //float my = imu.magY();
-      //float mz = imu.magZ();
+       // GYRO
+      float gx = imu.gyroZ() - calGyroZ;   
+      float gy = imu.gyroX() - calGyroX;    
+      float gz = imu.gyroY() - calGyroY;   
 
+      // ACCEL
+      float ax = imu.accelZ();   
+      float ay = imu.accelX(); //pitch  
+      float az = imu.accelY();
 
-      // Feed the data into the Madgwick filter
+      // Feed the data into the Madgwick filter with no sign changes
       if (calibrated) {
-        //filter.update(gx, gy, -gz, ax, ay, -az, mx, my, -mz);
-        filter.updateIMU(gx, gy, gz, ax, ay, -az);
+        filter.updateIMU(gx, gy, gz, ax, ay, az);
       }
     
       
@@ -140,11 +144,21 @@ void loop() {
       float yaw = filter.getYaw()- yawOffset;
       float pitch = filter.getPitch()- pitchOffset;
       float roll = filter.getRoll()- rollOffset;
+
+      // Normalize to [0, 360]
+      yaw = fmod(yaw + 360.0, 360.0);
+      // Normalize to [-180, 180]
+      if (roll > 180.0) roll -= 360.0;
+      if (roll < -180.0) roll += 360.0;
+
+      // Normalize to [-180, 180]
+      if (pitch > 180.0) pitch -= 360.0;
+      if (pitch < -180.0) pitch += 360.0;
       
       
 
       // Send yaw, pitch, roll over Wi-Fi
-      String yprData = String(yaw, 2) + "," + String(pitch, 2) + "," + String(roll, 2) + "\n";
+      String yprData = String(yaw, 1) + "," + String(pitch, 1) + "," + String(roll, 1) + "\n";
       client.print(yprData);
       //Serial.println(yprData);
     }
