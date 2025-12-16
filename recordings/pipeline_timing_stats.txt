@@ -1,0 +1,214 @@
+--- Run: 2025-12-09 18:39:52.012978 ---
+Staging Layer:      11.1094 sec
+Transformation Layer: 21.9148 sec
+  - Motor Transform:  0.0019 sec
+  - Visual Transform: 21.8949 sec
+  - IMU Transform:    0.0028 sec
+  - Audio Transform:  0.0152 sec
+Mart Experience Layer:0.0840 sec
+Total Pipeline Time:  21.9988 sec
+------------------------------
+--- Run: 2025-12-09 18:45:29.389162 ---
+Staging Layer:      11.1704 sec
+Transformation Layer: 22.8297 sec
+  - Motor Transform:  0.0020 sec
+  - Visual Transform: 22.8097 sec
+  - IMU Transform:    0.0028 sec
+  - Audio Transform:  0.0152 sec
+Mart Experience Layer:0.1196 sec
+Total Pipeline Time:  22.9493 sec
+------------------------------
+--- Run: 2025-12-09 18:51:23.213259 ---
+Staging Layer:      11.0391 sec
+Transformation Layer: 8.0147 sec
+  - Motor Transform:  0.0021 sec
+  - Visual Transform: 8.0008 sec
+  - IMU Transform:    0.0030 sec
+  - Audio Transform:  0.0089 sec
+Mart Experience Layer:0.0629 sec
+Total Pipeline Time:  8.0776 sec
+------------------------------
+--- Run: 2025-12-09 18:55:05.876137 ---
+Staging Layer:      11.1555 sec
+Transformation Layer: 1.3780 sec
+  - Motor Transform:  0.0011 sec
+  - Visual Transform: 1.3645 sec
+  - IMU Transform:    0.0029 sec
+  - Audio Transform:  0.0095 sec
+Mart Experience Layer:0.0592 sec
+Total Pipeline Time:  1.4371 sec
+------------------------------
+--- Run: 2025-12-09 20:01:18.529403 ---
+Staging Layer:      11.1061 sec
+Transformation Layer: 2.4229 sec
+  - Motor Transform:  0.0025 sec
+  - Visual Transform: 2.4086 sec
+  - IMU Transform:    0.0030 sec
+  - Audio Transform:  0.0089 sec
+Mart Experience Layer:0.0622 sec
+Total Pipeline Time:  2.4851 sec
+------------------------------
+--- Run: 2025-12-09 20:05:46.279661 ---
+Staging Layer:      11.1478 sec
+Transformation Layer: 2.1927 sec
+  - Motor Transform:  0.0022 sec
+  - Visual Transform: 2.1772 sec
+  - IMU Transform:    0.0034 sec
+  - Audio Transform:  0.0100 sec
+Mart Experience Layer:0.0664 sec
+Total Pipeline Time:  2.2591 sec
+------------------------------
+--- Run: 2025-12-09 20:07:12.404181 ---
+Staging Layer:      21.4669 sec
+Transformation Layer: 3.0891 sec
+  - Motor Transform:  0.0016 sec
+  - Visual Transform: 3.0664 sec
+  - IMU Transform:    0.0049 sec
+  - Audio Transform:  0.0162 sec
+Mart Experience Layer:0.1188 sec
+Total Pipeline Time:  3.2079 sec
+------------------------------
+--- Run: 2025-12-09 20:08:39.061273 ---
+Staging Layer:      21.3319 sec
+Transformation Layer: 3.7048 sec
+  - Motor Transform:  0.0019 sec
+  - Visual Transform: 3.6790 sec
+  - IMU Transform:    0.0062 sec
+  - Audio Transform:  0.0178 sec
+Mart Experience Layer:0.1213 sec
+Total Pipeline Time:  3.8261 sec
+------------------------------
+--- Run: 2025-12-09 20:10:50.479401 ---
+Staging Layer:      11.0960 sec
+Transformation Layer: 2.1042 sec
+  - Motor Transform:  0.0022 sec
+  - Visual Transform: 2.0892 sec
+  - IMU Transform:    0.0032 sec
+  - Audio Transform:  0.0095 sec
+Mart Experience Layer:0.0643 sec
+Total Pipeline Time:  2.1684 sec
+------------------------------
+--- Run: 2025-12-09 20:11:54.776948 ---
+Staging Layer:      21.4443 sec
+Transformation Layer: 3.1088 sec
+  - Motor Transform:  0.0015 sec
+  - Visual Transform: 3.0819 sec
+  - IMU Transform:    0.0060 sec
+  - Audio Transform:  0.0193 sec
+Mart Experience Layer:0.1177 sec
+Total Pipeline Time:  3.2265 sec
+------------------------------
+--- Run: 2025-12-09 20:12:19.180261 ---
+Staging Layer:      11.0065 sec
+Transformation Layer: 1.6127 sec
+  - Motor Transform:  0.0013 sec
+  - Visual Transform: 1.5978 sec
+  - IMU Transform:    0.0033 sec
+  - Audio Transform:  0.0102 sec
+Mart Experience Layer:0.0618 sec
+Total Pipeline Time:  1.6745 sec
+------------------------------
+--- Run: 2025-12-09 20:13:07.187104 ---
+Staging Layer:      21.3710 sec
+Transformation Layer: 3.7092 sec
+  - Motor Transform:  0.0018 sec
+  - Visual Transform: 3.6860 sec
+  - IMU Transform:    0.0050 sec
+  - Audio Transform:  0.0164 sec
+Mart Experience Layer:0.1228 sec
+Total Pipeline Time:  3.8321 sec
+------------------------------
+--- Run: 2025-12-09 20:16:18.299173 ---
+Staging Layer:      11.0802 sec
+Transformation Layer: 2.0384 sec
+  - Motor Transform:  0.0023 sec
+  - Visual Transform: 2.0232 sec
+  - IMU Transform:    0.0032 sec
+  - Audio Transform:  0.0098 sec
+Mart Experience Layer:0.0620 sec
+Total Pipeline Time:  2.1004 sec
+------------------------------
+--- Run: 2025-12-09 20:17:31.789013 ---
+Staging Layer:      21.2860 sec
+Transformation Layer: 3.0736 sec
+  - Motor Transform:  0.0018 sec
+  - Visual Transform: 3.0488 sec
+  - IMU Transform:    0.0055 sec
+  - Audio Transform:  0.0176 sec
+Mart Experience Layer:0.1208 sec
+Total Pipeline Time:  3.1945 sec
+------------------------------
+--- Run: 2025-12-09 20:19:25.976744 ---
+Staging Layer:      21.7150 sec
+Transformation Layer: 2.9027 sec
+  - Motor Transform:  0.0016 sec
+  - Visual Transform: 2.8798 sec
+  - IMU Transform:    0.0050 sec
+  - Audio Transform:  0.0163 sec
+Mart Experience Layer:0.1291 sec
+Total Pipeline Time:  3.0318 sec
+------------------------------
+--- Run: 2025-12-09 20:21:25.314559 ---
+Staging Layer:      21.3240 sec
+Transformation Layer: 3.0802 sec
+  - Motor Transform:  0.0020 sec
+  - Visual Transform: 3.0561 sec
+  - IMU Transform:    0.0054 sec
+  - Audio Transform:  0.0166 sec
+Mart Experience Layer:0.1218 sec
+Total Pipeline Time:  3.2020 sec
+------------------------------
+--- Run: 2025-12-09 20:23:02.860246 ---
+Staging Layer:      21.5217 sec
+Transformation Layer: 3.5865 sec
+  - Motor Transform:  0.0018 sec
+  - Visual Transform: 3.5645 sec
+  - IMU Transform:    0.0048 sec
+  - Audio Transform:  0.0154 sec
+Mart Experience Layer:0.1241 sec
+Total Pipeline Time:  3.7106 sec
+------------------------------
+--- Run: 2025-12-09 20:24:13.925100 ---
+Staging Layer:      21.3822 sec
+Transformation Layer: 2.7675 sec
+  - Motor Transform:  0.0016 sec
+  - Visual Transform: 2.7463 sec
+  - IMU Transform:    0.0047 sec
+  - Audio Transform:  0.0149 sec
+Mart Experience Layer:0.1173 sec
+Total Pipeline Time:  2.8848 sec
+------------------------------
+--- Run: 2025-12-09 20:25:00.942570 ---
+Staging Layer:      21.4300 sec
+Transformation Layer: 3.1774 sec
+  - Motor Transform:  0.0017 sec
+  - Visual Transform: 3.1549 sec
+  - IMU Transform:    0.0048 sec
+  - Audio Transform:  0.0160 sec
+Mart Experience Layer:0.1165 sec
+Total Pipeline Time:  3.2939 sec
+------------------------------
+--- Run: 2025-12-10 11:05:51.925940 ---
+Staging Layer:      21.4890 sec
+Transformation Layer: 3.2359 sec
+  - Motor Transform:  0.0018 sec
+  - Visual Transform: 3.2131 sec
+  - IMU Transform:    0.0047 sec
+  - Audio Transform:  0.0163 sec
+Mart Experience Layer:0.1272 sec
+Total Pipeline Time:  3.3631 sec
+------------------------------
+--- Run: 2025-12-16 08:31:33.488928 ---
+Staging:      11.6486 s
+Transform:    7.7124 s
+Mart Layer:   0.0666 s
+Decision/Exec:0.0013 s
+Total Time:   19.4289 s
+------------------------------
+--- Run: 2025-12-16 08:32:10.381883 ---
+Staging:      11.1390 s
+Transform:    1.9408 s
+Mart Layer:   0.0594 s
+Decision/Exec:0.0047 s
+Total Time:   13.1439 s
+------------------------------

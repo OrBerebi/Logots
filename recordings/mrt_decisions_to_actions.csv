@@ -1,0 +1,12 @@
+decision_id,timestamp,source_module,source_event_id,experience_id,decision_type,parameters
+1,2025-12-16 10:02:38.934264,mrt_immediate_decisions,bb4a05d3,45,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -8.432167053222656}"
+2,2025-12-16 10:02:38.934295,mrt_immediate_decisions,c3b5de76,46,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -10.159709930419922}"
+3,2025-12-16 10:02:38.934321,mrt_immediate_decisions,6713b0e2,47,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -10.425756454467773}"
+1,2025-12-16 10:02:42.113267,mrt_immediate_decisions,65095c46,48,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -10.989606857299805}"
+2,2025-12-16 10:02:42.113298,mrt_immediate_decisions,dd7b833f,49,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -10.899404525756836}"
+3,2025-12-16 10:02:42.113322,mrt_immediate_decisions,0172aa1c,50,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -10.696460723876953}"
+4,2025-12-16 10:02:42.113345,mrt_immediate_decisions,30309114,53,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": 3.5855655670166016}"
+1,2025-12-16 10:02:48.332941,mrt_immediate_decisions,753c9f02,77,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -1.4403133392333984}"
+1,2025-12-16 10:02:51.651823,mrt_immediate_decisions,3e0958ce,84,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -19.72214698791504}"
+2,2025-12-16 10:02:51.651854,mrt_immediate_decisions,351fa696,85,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": -19.864837646484375}"
+1,2025-12-16 10:03:20.619511,mrt_immediate_decisions,0b75dee9,157,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": 14.892600059509277}"

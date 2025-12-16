@@ -1,23 +1,5 @@
 #include "esp_camera.h"
 #include <WiFi.h>
-#include <driver/i2s.h>
-
-// I2S audio configuration
-#define I2S_WS 15 // Word Select (LRCL) pin
-#define I2S_SCK 14 // Bit Clock pin
-#define I2S_SD 13 // Serial Data pin
-#define I2S_PORT I2S_NUM_0
-#define bufferLen 64
-int16_t sBuffer[bufferLen];
-
-//
-// WARNING!!! PSRAM IC required for UXGA resolution and high JPEG quality
-//            Ensure ESP32 Wrover Module or other board with PSRAM is selected
-//            Partial images will be transmitted if image exceeds buffer size
-//
-//            You must select partition scheme from the board menu that has at least 3MB APP space.
-//            Face Recognition is DISABLED for ESP32 and ESP32-S2, because it takes up from 15
-//            seconds to process single frame. Face Detection is ENABLED if PSRAM is enabled as well
 
 // ===================
 // Select camera model
@@ -26,18 +8,15 @@ int16_t sBuffer[bufferLen];
 #include "camera_pins.h"
 
 // ===========================
-// Enter your WiFi credentials
+// WiFi Credentials
 // ===========================
-const char *ssid = "self.object";
-const char *password = "FRTZ35%%grmnySF";
-//const char *ssid = "A-6-168";
-//const char *password = "62488453";
+const char *ssid = "Mushkins";
+const char *password = "besserbros";
 
 void startCameraServer();
 void setupLedFlash(int pin);
 
 void setup() {
-
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
@@ -62,48 +41,28 @@ void setup() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
-  //config.frame_size = FRAMESIZE_96X96;
-  //config.frame_size = FRAMESIZE_UXGA;
-  //config.frame_size = FRAMESIZE_SVGA;
-  //config.pixel_format = PIXFORMAT_GRAYSCALE;  // for BW streaming
-  config.pixel_format = PIXFORMAT_JPEG;  // for streaming
-  //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
-  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-  config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 12;
-  config.fb_count = 1;
+  config.pixel_format = PIXFORMAT_JPEG;
+  
+  // === OPTIMIZATION 1: Frame Size ===
+  // VGA (640x480) is significantly faster to transfer than SVGA 
+  // and close enough for your 640x640 target.
+  config.frame_size = FRAMESIZE_VGA;
 
-  // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
-  //                      for larger pre-allocated frame buffer.
-  if (config.pixel_format == PIXFORMAT_JPEG) {
-    if (psramFound()) {
-      config.jpeg_quality = 10;
-      config.fb_count = 2;
-      config.grab_mode = CAMERA_GRAB_LATEST;
-    } else {
-      // Limit the frame size when PSRAM is not available
-      config.frame_size = FRAMESIZE_SVGA;
-      //config.frame_size = FRAMESIZE_96X96;
-      config.fb_location = CAMERA_FB_IN_DRAM;
-    }
+  // === OPTIMIZATION 2: PSRAM & Buffering ===
+  if (psramFound()) {
+    // Keep config quality high (low number) here to ensure a Large Buffer is allocated
+    config.jpeg_quality = 10; 
+    config.fb_count = 2; // Double buffering
+    config.grab_mode = CAMERA_GRAB_LATEST; // Grab the newest frame, discard old ones
   } else {
-    // Best option for face detection/recognition
-    config.frame_size = FRAMESIZE_240X240;
-    //config.frame_size = FRAMESIZE_96X96;
-#if CONFIG_IDF_TARGET_ESP32S3
-    config.fb_count = 2;
-#endif
+    // Fallback for boards without PSRAM
+    config.frame_size = FRAMESIZE_VGA;
+    config.fb_location = CAMERA_FB_IN_DRAM;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
   }
 
-//#if defined(CAMERA_MODEL_ESP_EYE)
-//  pinMode(13, INPUT_PULLUP);
-//  pinMode(14, INPUT_PULLUP);
-//#endif
-
-// Always force SVGA before init
-config.frame_size = FRAMESIZE_SVGA;
-
-  // camera init
+  // Camera Init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed with error 0x%x", err);
@@ -111,36 +70,24 @@ config.frame_size = FRAMESIZE_SVGA;
   }
 
   sensor_t *s = esp_camera_sensor_get();
-  // initial sensors are flipped vertically and colors are a bit saturated
-  if (s->id.PID == OV3660_PID) {
-    s->set_vflip(s, 1);        // flip it back
-    s->set_brightness(s, 1);   // up the brightness just a bit
-    s->set_saturation(s, -2);  // lower the saturation
-  }
-  // drop down frame size for higher initial frame rate
-  if (config.pixel_format == PIXFORMAT_JPEG) {
-    //s->set_framesize(s, FRAMESIZE_96X96);
-    //s->set_framesize(s, FRAMESIZE_SVGA);
-    //s->set_framesize(s, FRAMESIZE_QVGA);
-    //config.frame_size = FRAMESIZE_96X96;
-  }
+  
+  // === OPTIMIZATION 3: Sensor Tuning ===
+  // Set runtime quality to 50 (Higher number = smaller file = faster stream)
+  // You can adjust this between 30 (better looking) and 60 (super fast)
+  s->set_quality(s, 20); 
+  
+  // Explicitly enforce VGA size on the sensor
+  s->set_framesize(s, FRAMESIZE_VGA);
 
-//#if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
-//  s->set_vflip(s, 1);
-//  s->set_hmirror(s, 1);
-//#endif
+  // User Preferences (Visuals)
+  s->set_vflip(s, 1);        // Flip image
+  s->set_brightness(s, 1);   // Boost brightness
+  s->set_saturation(s, -2);  // Reduce saturation
 
-//#if defined(CAMERA_MODEL_ESP32S3_EYE)
-//  s->set_vflip(s, 1);
-//#endif
-
-// Setup LED FLash if LED pin is defined in camera_pins.h
-#if defined(LED_GPIO_NUM)
-  setupLedFlash(LED_GPIO_NUM);
-#endif
-
+  // WiFi Connection
   WiFi.begin(ssid, password);
-  WiFi.setSleep(false);
+  // === OPTIMIZATION 4: Power ===
+  WiFi.setSleep(false); // Disable WiFi power saving for max throughput
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -154,14 +101,9 @@ config.frame_size = FRAMESIZE_SVGA;
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
-
 }
 
 void loop() {
-  // Do nothing. Everything is done in another task by the web server
+  // Main task is handled by the WebServer in the background
   delay(10000);
 }
-
-
-
-

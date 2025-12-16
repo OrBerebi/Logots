@@ -1,0 +1,12 @@
+immed_id,timestamp,experience_id,rule_name,trigger_values,proposed_decision
+bb4a05d3,2025-12-16 10:02:38.933131,45,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+c3b5de76,2025-12-16 10:02:38.933176,46,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+6713b0e2,2025-12-16 10:02:38.933210,47,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+65095c46,2025-12-16 10:02:42.111914,48,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+dd7b833f,2025-12-16 10:02:42.111971,49,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+0172aa1c,2025-12-16 10:02:42.112008,50,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+30309114,2025-12-16 10:02:42.112081,53,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""high""}",get_closer
+753c9f02,2025-12-16 10:02:48.331654,77,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""low""}",get_closer
+3e0958ce,2025-12-16 10:02:51.650392,84,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""medium""}",get_closer
+351fa696,2025-12-16 10:02:51.650457,85,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""medium""}",get_closer
+0b75dee9,2025-12-16 10:03:20.618089,157,CAT_GREETING,"{""cat_detected"": true, ""meow_loudness"": ""low""}",get_closer

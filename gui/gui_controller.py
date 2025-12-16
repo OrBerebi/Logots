@@ -6,100 +6,110 @@ from tkinter import messagebox
 import threading
 import time
 from threading import Event
-import recording_module
+import recording_module_v2 as rm
+import transformation_mart_pipeline as t_mart 
 
 class RecorderGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Robot Controller")
+        self.root.title("Robot Controller - Stream Mode")
 
-        # Input
-        self.label = tk.Label(root, text="Recording Duration (sec):")
+        # --- Model Status Indicator ---
+        self.status_frame = tk.Frame(root)
+        self.status_frame.pack(pady=5, fill="x")
+        
+        self.model_status_label = tk.Label(self.status_frame, text="⏳ AI Model: Initializing...", fg="orange")
+        self.model_status_label.pack()
+
+        # Input (Optional Safety Timeout)
+        self.label = tk.Label(root, text="Max Safety Duration (sec):")
         self.label.pack()
         self.duration_entry = tk.Entry(root)
-        self.duration_entry.insert(0, "10")
+        self.duration_entry.insert(0, "600") # Default to 10 minutes safety
         self.duration_entry.pack()
 
         # Buttons
-        self.start_button = tk.Button(root, text="Start Recording", command=self.start_recording)
-        self.start_button.pack(pady=5)
+        self.start_button = tk.Button(root, text="Start Streaming", command=self.start_recording, bg="#ddffdd")
+        self.start_button.pack(pady=5, ipadx=10)
 
-        self.stop_button = tk.Button(root, text="Stop", state=tk.DISABLED, command=self.stop_recording)
-        self.stop_button.pack(pady=5)
+        self.stop_button = tk.Button(root, text="STOP", state=tk.DISABLED, command=self.stop_recording, bg="#ffdddd")
+        self.stop_button.pack(pady=5, ipadx=20)
 
-        # Countdown
-        self.remaining_label = tk.Label(root, text="")
-        self.remaining_label.pack()
+        # Timer Display (Stopwatch)
+        self.timer_label = tk.Label(root, text="Ready", font=("Helvetica", 16))
+        self.timer_label.pack(pady=10)
 
         # Internal state
         self.stop_event = Event()
-        self.duration = 0
         self.start_time = None
         self.thread = None
         self.running = False
-        self.recording = False
-        self.speed = 75
-        self.arm_angle = 90  # default position
+        self.speed = 85
+        self.arm_angle = 90 
 
-                # Add Movement Controls
+        # Add Movement Controls
         movement_frame = ttk.LabelFrame(root, text="Movement Controls", padding=10)
         movement_frame.pack(padx=10, pady=10, fill="x")
 
-        # Speed slider (left side)
+        # Speed slider
         self.speed_slider = tk.Scale(movement_frame, from_=120, to=60,
                                      orient=tk.VERTICAL, label="Speed",
                                      command=self.update_speed)
         self.speed_slider.set(self.speed)
         self.speed_slider.grid(row=0, column=0, rowspan=3, padx=10, pady=5)
 
-        # Arrow buttons (center in columns 1–3)
+        # D-Pad
         self.forward_btn  = ttk.Button(movement_frame, text="↑")
         self.backward_btn = ttk.Button(movement_frame, text="↓")
         self.left_btn     = ttk.Button(movement_frame, text="←")
         self.right_btn    = ttk.Button(movement_frame, text="→")
 
-        # Layout in grid (D-pad style, shifted to center)
         self.forward_btn.grid(row=0, column=2, padx=5, pady=5)
         self.left_btn.grid(row=1, column=1, padx=5, pady=5, sticky="e")
         self.right_btn.grid(row=1, column=3, padx=5, pady=5, sticky="w")
         self.backward_btn.grid(row=2, column=2, padx=5, pady=5)
 
-        # Arm angle slider (right side)
+        # Arm slider
         self.arm_slider = tk.Scale(movement_frame, from_=180, to=0,
                                    orient=tk.VERTICAL, label="Arm Angle",
                                    command=self.update_arm_angle)
         self.arm_slider.set(self.arm_angle)
         self.arm_slider.grid(row=0, column=4, rowspan=3, padx=10, pady=5)
 
-        # Bind press + release events
+        # Bindings
         self.forward_btn.bind("<ButtonPress>", lambda e: self.move_command(self.speed, self.speed))
         self.forward_btn.bind("<ButtonRelease>", lambda e: self.move_command(0, 0))
-
         self.backward_btn.bind("<ButtonPress>", lambda e: self.move_command(-self.speed, -self.speed))
         self.backward_btn.bind("<ButtonRelease>", lambda e: self.move_command(0, 0))
-
         self.left_btn.bind("<ButtonPress>", lambda e: self.move_command(-self.speed, self.speed))
         self.left_btn.bind("<ButtonRelease>", lambda e: self.move_command(0, 0))
-
         self.right_btn.bind("<ButtonPress>", lambda e: self.move_command(self.speed, -self.speed))
         self.right_btn.bind("<ButtonRelease>", lambda e: self.move_command(0, 0))
+
+        # Background Loader
+        threading.Thread(target=self.preload_model, daemon=True).start()
+
+    def preload_model(self):
+        try:
+            t_mart.get_visual_model()
+            self.root.after(0, lambda: self.model_status_label.config(text="✅ AI Model: Ready", fg="green"))
+        except Exception as e:
+            self.root.after(0, lambda: self.model_status_label.config(text="❌ AI Model: Error", fg="red"))
 
     def update_speed(self, val):
         self.speed = int(val)
 
     def update_arm_angle(self, val):
-        """Update arm angle independently of movement arrows (only during recording)."""
         self.arm_angle = int(val)
-        if self.running:  # Only send when recording is active
-            # Wheels stay stopped, update arm only
-            recording_module.send_motor(0, 0, self.arm_angle)
+        if self.running:
+            rm.send_motor(0, 0, self.arm_angle)
 
     def start_recording(self):
+        # We allow a "safety" duration just in case user forgets to stop
         try:
-            self.duration = int(self.duration_entry.get())
+            safety_duration = int(self.duration_entry.get())
         except ValueError:
-            messagebox.showerror("Invalid Input", "Enter a valid duration in seconds.")
-            return
+            safety_duration = 600 # Default 10 mins
 
         self.stop_event.clear()
         self.start_button.config(state=tk.DISABLED)
@@ -107,41 +117,48 @@ class RecorderGUI:
         self.running = True
         self.start_time = time.time()
 
-        self.thread = threading.Thread(target=self.run_collection)
+        # Start the collection thread
+        # Note: We pass safety_duration, but the new module largely ignores it 
+        # in favor of the stop_event, though we can use it to auto-click stop if needed.
+        self.thread = threading.Thread(target=self.run_collection, args=(safety_duration,))
         self.thread.start()
-        self.update_timer()
+        
+        self.update_stopwatch()
 
-    def run_collection(self):
-        recording_module.run_data_collection(self.duration, self.stop_event)
-        self.running = False
-        self.start_button.config(state=tk.NORMAL)
-        self.stop_button.config(state=tk.DISABLED)
-        self.remaining_label.config(text="Done.")
+    def run_collection(self, safety_duration):
+        rm.run_data_collection(safety_duration, self.stop_event)
+        
+        # When rm returns (after stop is pressed), reset UI
+        self.root.after(0, self.on_recording_finished)
 
     def stop_recording(self):
         self.stop_event.set()
-        self.running = False
-        self.remaining_label.config(text="Stopped by user.")
-        self.start_button.config(state=tk.NORMAL)
+        self.timer_label.config(text="Stopping... (Finishing Pipeline)")
         self.stop_button.config(state=tk.DISABLED)
 
-    def update_timer(self):
+    def on_recording_finished(self):
+        self.running = False
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.timer_label.config(text="Stopped / Saved.")
+
+    def update_stopwatch(self):
         if not self.running:
             return
-        elapsed = int(time.time() - self.start_time)
-        remaining = max(0, self.duration - elapsed)
-
-        if self.stop_event.is_set() or remaining <= 0:
-            self.remaining_label.config(text="Finalizing...")
+            
+        elapsed = time.time() - self.start_time
+        mins, secs = divmod(int(elapsed), 60)
+        self.timer_label.config(text=f"Live: {mins:02}:{secs:02}")
+        
+        # Check if thread is still alive
+        if self.thread and not self.thread.is_alive():
+            self.on_recording_finished()
         else:
-            self.remaining_label.config(text=f"Remaining: {remaining} sec")
-            self.root.after(1000, self.update_timer)
+            self.root.after(100, self.update_stopwatch)
 
-    # Movement button callbacks
     def move_command(self, left_pwm, right_pwm):
-        if self.running:  # Only active during recording
-            recording_module.send_motor(left_pwm, right_pwm, self.arm_angle)
-
+        if self.running:
+            rm.send_motor(left_pwm, right_pwm, self.arm_angle)
 
 if __name__ == "__main__":
     root = tk.Tk()
