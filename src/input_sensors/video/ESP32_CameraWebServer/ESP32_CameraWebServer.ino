@@ -80,7 +80,7 @@ void setup() {
   s->set_framesize(s, FRAMESIZE_VGA);
 
   // User Preferences (Visuals)
-  s->set_vflip(s, 1);        // Flip image
+  //s->set_vflip(s, 1);        // Flip image
   s->set_brightness(s, 1);   // Boost brightness
   s->set_saturation(s, -2);  // Reduce saturation
 

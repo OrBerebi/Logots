@@ -6,7 +6,7 @@ from tkinter import messagebox
 import threading
 import time
 from threading import Event
-import recording_module_v2 as rm
+import recording_module as rm
 import transformation_mart_pipeline as t_mart 
 
 class RecorderGUI:
@@ -87,14 +87,24 @@ class RecorderGUI:
         self.right_btn.bind("<ButtonRelease>", lambda e: self.move_command(0, 0))
 
         # Background Loader
-        threading.Thread(target=self.preload_model, daemon=True).start()
+        threading.Thread(target=self.preload_models, daemon=True).start()
 
-    def preload_model(self):
+    def preload_models(self):
+        """Loads both Vision and Audio models in the background."""
         try:
+            # 1. Load Visual Model (YOLO)
             t_mart.get_visual_model()
-            self.root.after(0, lambda: self.model_status_label.config(text="✅ AI Model: Ready", fg="green"))
+            
+            # 2. Load Audio Model (AST Transformer)
+            # This will now trigger the download/load into memory immediately
+            t_mart.get_audio_model() 
+            
+            # Update UI on Main Thread
+            self.root.after(0, lambda: self.model_status_label.config(text="✅ Vision & Audio AI: Ready", fg="green"))
+            
         except Exception as e:
-            self.root.after(0, lambda: self.model_status_label.config(text="❌ AI Model: Error", fg="red"))
+            print(f"Model Load Error: {e}")
+            self.root.after(0, lambda: self.model_status_label.config(text=f"❌ Model Error: {str(e)[:20]}...", fg="red"))
 
     def update_speed(self, val):
         self.speed = int(val)

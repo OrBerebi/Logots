@@ -11,6 +11,8 @@ from datetime import datetime
 import threading
 from typing import Dict, Any, List, Tuple
 import gc
+import torch
+
 
 # --- GLOBAL MODEL STATE & CONFIGURATION ---
 _yolo_model = None
@@ -69,18 +71,28 @@ def safe_literal_eval(val):
             return val # Return raw string if parse fails
     return val
 
-def get_audio_model(device='cpu'):
+def get_audio_model(device=None):
     """
-    Initializes the AST Model.
+    Initializes the AST Model. Auto-detects device if not specified.
     """
     global _audio_pipe
     
     if _audio_pipe is None:
+        # Auto-detect device if not explicitly provided
+        if device is None and torch is not None:
+             device = "mps" if torch.backends.mps.is_available() else "cpu"
+        elif device is None:
+             device = "cpu"
+
         print(f"Loading AST Model on {device}...")
         try:
             from transformers import pipeline
         except ImportError:
             raise ImportError("Please run: pip install transformers datasets")
+        
+        # Suppress transformers loading bars
+        from transformers.utils import logging
+        logging.set_verbosity_error()
         
         _audio_pipe = pipeline(
             "audio-classification", 
@@ -197,22 +209,20 @@ def process_audio_frame(row: pd.Series, buffer: list, pipe) -> tuple:
 def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
     """Main transformation for audio data."""
     import gc
-    import torch
     
-    # --- GPU TRY ---
-    # We try to use MPS (Mac GPU). If it crashes, the user knows to revert to -1.
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
-    print(f"🚀 Attempting to run Audio AST on: {device}")
-    
-    pipe = get_audio_model(device=device)
+    # Auto-load model (Device detection handled inside get_audio_model)
+    pipe = get_audio_model()
     
     results = []
     audio_buffer = [] 
     
-    print(f"Processing {len(df)} frames...")
+    total_frames = len(df)
+    #print(f"Processing Audio for {total_frames} frames...")
     
     for i, row in df.iterrows():
-        if i % 10 == 0: print(f"Processing {i}/{len(df)}...", end='\r')
+        # NOISY PRINT FIX: Print only every 100 frames (approx 25 seconds of data)
+        #if i % 100 == 0: 
+        #    print(f"   Audio Transform: {i}/{total_frames}...", end='\r')
         
         row_data = {
             'frame_id': row.get('frame_id', i), 
@@ -224,7 +234,8 @@ def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
             res, audio_buffer = process_audio_frame(row_data, audio_buffer, pipe)
             results.append(res)
         except Exception as e:
-            print(f"\n⚠️ Skipped frame {i} due to error: {e}")
+            # NOISY PRINT FIX: Suppress per-frame error printing. 
+            # We fail silently and insert a default row to keep the pipeline moving.
             results.append({
                 'frame_id': row['frame_id'], 
                 'timestamp': row['timestamp'], 
@@ -234,6 +245,7 @@ def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
         
         if i % 500 == 0: gc.collect()
 
+    #print(f"   Audio Transform: Complete.          ") # Clear the line
     return pd.DataFrame(results)
 
 
