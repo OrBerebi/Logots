@@ -10,13 +10,16 @@ from PIL import Image
 from datetime import datetime
 import threading
 from typing import Dict, Any, List, Tuple
+import gc
 
 # --- GLOBAL MODEL STATE & CONFIGURATION ---
 _yolo_model = None
 _yolo_lock = threading.Lock()
-#VISUAL_CONF_THR = 0.05
 VISUAL_CONF_THR = 0.10
 VISUAL_IMG_SIZE = 640
+
+# --- GLOBALS ---
+_audio_pipe = None
 
 def get_visual_model(device: str = 'mps'): 
     """Initializes or returns the singleton YOLO model."""
@@ -66,105 +69,172 @@ def safe_literal_eval(val):
             return val # Return raw string if parse fails
     return val
 
+def get_audio_model(device='cpu'):
+    """
+    Initializes the AST Model.
+    """
+    global _audio_pipe
+    
+    if _audio_pipe is None:
+        print(f"Loading AST Model on {device}...")
+        try:
+            from transformers import pipeline
+        except ImportError:
+            raise ImportError("Please run: pip install transformers datasets")
+        
+        _audio_pipe = pipeline(
+            "audio-classification", 
+            model="mit/ast-finetuned-audioset-10-10-0.4593",
+            device=device 
+        )
+        print("✅ AST Spectrogram Model loaded.")
+        
+    return _audio_pipe
 
-# --- TRANSFORMATION LAYER FUNCTIONS ---
 
 # ==============================================================================
-# 1. AUDIO TRANSFORMATION (Cell 2)
+# 1. AUDIO TRANSFORMATION (GPU ENABLED + LOG-BASED VETO)
 # ==============================================================================
 
-def compute_fft(samples: List[float], sampling_rate: int = 16000) -> Dict[str, np.ndarray]:
-    """Computes the Real FFT for audio samples."""
-    samples_arr = np.array(samples)
-    n = len(samples_arr)
-    freqs = np.fft.rfftfreq(n, d=1/sampling_rate)
-    magnitudes = np.abs(np.fft.rfft(samples_arr))
-    return {'freqs': freqs, 'magnitudes': magnitudes}
+def process_audio_frame(row: pd.Series, buffer: list, pipe) -> tuple:
+    """
+    3-Second Buffer + Log-Based Veto
+    """
+    # 1. Update Rolling Buffer
+    raw_samples = row.get('audio_samples', [])
+    if isinstance(raw_samples, str):
+        try: raw_samples = ast.literal_eval(raw_samples)
+        except: raw_samples = []
+    
+    if not isinstance(raw_samples, list): raw_samples = []
+    buffer.extend(raw_samples)
+    
+    # 3 Seconds Buffer (Best for Context)
+    INPUT_BUFFER_SIZE = 16000 
+    
+    if len(buffer) > INPUT_BUFFER_SIZE:
+        buffer = buffer[-INPUT_BUFFER_SIZE:]
+    
+    # Defaults
+    is_cat, is_human = 0, 0
+    cat_prob, human_prob, motor_prob = 0.0, 0.0, 0.0
+    loudness = 'none'
 
+    # 2. Inference (Wait for buffer to fill > 80%)
+    if len(buffer) >= (INPUT_BUFFER_SIZE * 0.8):
+        waveform = np.array(buffer, dtype=np.float32)
+        
+        max_val = np.max(np.abs(waveform))
+        if max_val > 0.01: waveform = waveform / max_val
+            
+        if max_val > 0.001: 
+            try:
+                outputs = pipe({"array": waveform, "sampling_rate": 16000}, top_k=10)
+                
+                # --- LOG ANALYSIS VETO LIST ---
+                # Based on your logs, these are the sounds your robot makes:
+                motor_labels = [
+                    "Vehicle", "Engine", "Electric motor", "Mechanical fan", 
+                    "Printer",        
+                    "Sliding door",  
+                    "Door",           
+                    "Telephone",     
+                    "Telephone bell ringing",
+                    "Beep, bleep"
+                ]
+                
+                cat_labels = ["Meow"]
+                human_labels = ["Speech"]
 
-def classify_voice_or_noise(freqs: np.ndarray, magnitudes: np.ndarray, voice_freq_range: Tuple[int, int] = (0, 8000), energy_threshold: int = 30000000) -> str:
-    mask = (freqs >= voice_freq_range[0]) & (freqs <= voice_freq_range[1])
-    energy = magnitudes[mask].sum()
-    return 'Voice' if energy > energy_threshold else 'Noise'
+                # Sum probabilities
+                cat_prob = sum([x['score'] for x in outputs if x['label'] in cat_labels])
+                human_prob = sum([x['score'] for x in outputs if x['label'] in human_labels])
+                motor_prob = sum([x['score'] for x in outputs if x['label'] in motor_labels])
+                
+                # --- USER LOGIC ---
+                
+                # 1. Human (Speech)
+                if human_prob > 0.50: 
+                    is_human = 1
+                
+                # 2. Cat (Meow)
+                if cat_prob > 0.09: 
+                    is_cat = 1
+                    
+                # 3. Robot Noise Veto
+                # If the sound is more "Printer/Door" than "Meow", ignore it.
+                if motor_prob > cat_prob: 
+                    is_cat = 0
 
+                # Loudness
+                if is_cat:
+                    avg_energy = np.mean(np.abs(waveform))
+                    if avg_energy < 0.1: loudness = 'low'
+                    elif avg_energy < 0.3: loudness = 'medium'
+                    else: loudness = 'high'
+                
+                # DEBUG: Print Raw Labels to monitor
+                # if outputs[0]['score'] > 0.15:
+                #      top_labels = [f"{x['label']} ({x['score']:.2f})" for x in outputs[:3]]
+                #      print(f"Fr {row['frame_id']} RAW: {top_labels}")
+                    
+            except Exception as e:
+                print(f"Inference Error: {e}")
 
-def detect_cat_voice(classification: str, freqs: np.ndarray, magnitudes: np.ndarray, freq_range: Tuple[int, int] = (4000, 7000), harmonic_range: Tuple[int, int] = (400, 700), harmonic_threshold: int = 30) -> int:
-    if classification != 'Voice':
-        return 0
-    primary = magnitudes[(freqs >= freq_range[0]) & (freqs <= freq_range[1])]
-    if primary.size == 0:
-        return 0
-    peak = primary.max()
-    harmonic = magnitudes[(freqs >= harmonic_range[0]) & (freqs <= harmonic_range[1])].sum()
-    return 1 if (harmonic / peak) < harmonic_threshold else 0
-
-
-def detect_human_voice(classification: str, freqs: np.ndarray, magnitudes: np.ndarray, freq_range: Tuple[int, int] = (70, 170), harmonic_range: Tuple[int, int] = (7000, 8000), harmonic_threshold: int = 7) -> int:
-    if classification != 'Voice':
-        return 0
-    primary = magnitudes[(freqs >= freq_range[0]) & (freqs <= freq_range[1])]
-    if primary.size == 0:
-        return 0
-    norm_energy = (primary**2).mean() / (magnitudes**2).max()
-    harmonic = magnitudes[(freqs >= harmonic_range[0]) & (freqs <= harmonic_range[1])].sum()
-    return 1 if (norm_energy > 0.05 and harmonic > harmonic_threshold) else 0
-
-
-def calculate_meow_loudness(is_cat: int, magnitudes: np.ndarray) -> str:
-    if is_cat != 1:
-        return 'none'
-    avg = magnitudes.mean()
-    if avg < 40000:
-        return 'low'
-    if avg <= 60000:
-        return 'medium'
-    return 'high'
-
-
-def calculate_dominant_frequency(freqs: np.ndarray, magnitudes: np.ndarray) -> float:
-    if freqs.size == 0 or magnitudes.size == 0:
-        return 0.0
-    return freqs[np.argmax(magnitudes)]
+    return {
+        'frame_id': row['frame_id'], 
+        'timestamp': row['timestamp'],
+        'is_cat_voice': is_cat, 
+        'is_human_voice': is_human,
+        'cat_prob': cat_prob,
+        'human_prob': human_prob,
+        'motor_prob': motor_prob,
+        'meow_loudness': loudness,
+        'dominant_frequency': 0.0 
+    }, buffer
 
 
 def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
     """Main transformation for audio data."""
-    # Handle safe evaluation for memory vs CSV data
-    df['audio_samples'] = df['audio_samples'].apply(safe_literal_eval)
+    import gc
+    import torch
     
-    features = df[['frame_id', 'timestamp']].copy()
+    # --- GPU TRY ---
+    # We try to use MPS (Mac GPU). If it crashes, the user knows to revert to -1.
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    print(f"🚀 Attempting to run Audio AST on: {device}")
     
-    # Compute FFT
-    # fft_res is a Series of dictionaries: {'freqs': [...], 'magnitudes': [...]}
-    fft_res = df['audio_samples'].apply(compute_fft)
+    pipe = get_audio_model(device=device)
     
-    # Temporarily store fft_result in features for row-wise access later
-    features['fft_result'] = fft_res
+    results = []
+    audio_buffer = [] 
     
-    # Extract features using helper functions
-    features['classification'] = fft_res.apply(lambda x: classify_voice_or_noise(x['freqs'], x['magnitudes']))
+    print(f"Processing {len(df)} frames...")
     
-    features['is_cat_voice'] = features.apply(
-        lambda r: detect_cat_voice(r['classification'], r['fft_result']['freqs'], r['fft_result']['magnitudes']),
-        axis=1
-    )
-    features['is_human_voice'] = features.apply(
-        lambda r: detect_human_voice(r['classification'], r['fft_result']['freqs'], r['fft_result']['magnitudes']),
-        axis=1
-    )
-    features['meow_loudness'] = features.apply(
-        lambda r: calculate_meow_loudness(r['is_cat_voice'], r['fft_result']['magnitudes']),
-        axis=1
-    )
-    
-    # --- FIX WAS APPLIED HERE ---
-    # We iterate over fft_res directly, so x is the dict {'freqs':..., 'magnitudes':...}
-    features['dominant_frequency'] = fft_res.apply(
-        lambda x: calculate_dominant_frequency(x['freqs'], x['magnitudes'])
-    )
-    
-    # Remove 'fft_result' column as it contains large, complex data structures
-    return features.drop(columns=['fft_result', 'classification'])
+    for i, row in df.iterrows():
+        if i % 10 == 0: print(f"Processing {i}/{len(df)}...", end='\r')
+        
+        row_data = {
+            'frame_id': row.get('frame_id', i), 
+            'timestamp': row.get('timestamp', None),
+            'audio_samples': row.get('audio_samples', [])
+        }
+        
+        try:
+            res, audio_buffer = process_audio_frame(row_data, audio_buffer, pipe)
+            results.append(res)
+        except Exception as e:
+            print(f"\n⚠️ Skipped frame {i} due to error: {e}")
+            results.append({
+                'frame_id': row['frame_id'], 
+                'timestamp': row['timestamp'], 
+                'is_cat_voice': 0, 'is_human_voice': 0, 
+                'meow_loudness': 'none', 'dominant_frequency': 0.0
+            })
+        
+        if i % 500 == 0: gc.collect()
+
+    return pd.DataFrame(results)
 
 
 # ==============================================================================
