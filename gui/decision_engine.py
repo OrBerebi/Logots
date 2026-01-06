@@ -145,6 +145,27 @@ def def_back_off(trigger_experience):
 def def_placeholder(trigger_experience):
     return {"action": "no_motor_action", "parameters": {}}
 
+def def_center_gaze(trigger_experience):
+    """Goal: Rotate the robot to center the cat without moving forward."""
+    curr_x = trigger_experience.get('cat_position_x')
+    
+    if pd.notna(curr_x):
+        # Calculate pixel error from center (640 / 2)
+        error_x_pixels = (FRAME_WIDTH / 2) - curr_x
+        # Convert pixel error to rotation degrees
+        turn_deg = error_x_pixels / PIXELS_PER_DEG
+    else:
+        turn_deg = 0.0 
+
+    return {
+        "action": "move_sequence",
+        "description": "Gaze: Pivoting to center cat",
+        "parameters": {
+            "move_forward_cm": 0.0, # Do not move forward
+            "rotate_deg": float(turn_deg)
+        }
+    }
+
 # Decision to Action Router
 DECISION_DEFINITIONS = {
     'get_closer': def_get_closer,
@@ -187,24 +208,3 @@ def build_decisions_to_actions(immediate_decisions_df, experiences_df):
         })
         
     return pd.DataFrame(actions)
-
-def def_center_gaze(trigger_experience):
-    """Goal: Rotate the robot to center the cat without moving forward."""
-    curr_x = trigger_experience.get('cat_position_x')
-    
-    if pd.notna(curr_x):
-        # Calculate pixel error from center (640 / 2)
-        error_x_pixels = (FRAME_WIDTH / 2) - curr_x
-        # Convert pixel error to rotation degrees
-        turn_deg = error_x_pixels / PIXELS_PER_DEG
-    else:
-        turn_deg = 0.0 
-
-    return {
-        "action": "move_sequence",
-        "description": "Gaze: Pivoting to center cat",
-        "parameters": {
-            "move_forward_cm": 0.0, # Do not move forward
-            "rotate_deg": float(turn_deg)
-        }
-    }

@@ -1,1 +1,18 @@
 frame_id,timestamp,left_pwm,right_pwm,arm_angle,source,decision_id
+100,2026-01-06 23:40:36.243109,-150,150,90,mrt_decisions_to_actions,1
+101,2026-01-06 23:40:36.243138,150,-150,90,mrt_decisions_to_actions,2
+200,2026-01-06 23:40:39.392846,150,-150,90,mrt_decisions_to_actions,1
+201,2026-01-06 23:40:39.392875,0,0,90,mrt_decisions_to_actions,2
+202,2026-01-06 23:40:39.392896,150,-150,90,mrt_decisions_to_actions,3
+203,2026-01-06 23:40:39.392914,0,0,90,mrt_decisions_to_actions,4
+204,2026-01-06 23:40:39.392932,150,-150,90,mrt_decisions_to_actions,5
+300,2026-01-06 23:40:42.460502,150,-150,90,mrt_decisions_to_actions,1
+301,2026-01-06 23:40:42.460532,0,0,90,mrt_decisions_to_actions,2
+302,2026-01-06 23:40:42.460555,0,0,90,mrt_decisions_to_actions,3
+303,2026-01-06 23:40:42.460574,150,-150,90,mrt_decisions_to_actions,4
+304,2026-01-06 23:40:42.460593,150,-150,90,mrt_decisions_to_actions,5
+305,2026-01-06 23:40:42.460612,-150,150,90,mrt_decisions_to_actions,6
+306,2026-01-06 23:40:42.460629,-150,150,90,mrt_decisions_to_actions,7
+307,2026-01-06 23:40:42.460647,0,0,90,mrt_decisions_to_actions,8
+800,2026-01-06 23:40:57.622471,-150,150,90,mrt_decisions_to_actions,1
+801,2026-01-06 23:40:57.622499,0,0,90,mrt_decisions_to_actions,2
