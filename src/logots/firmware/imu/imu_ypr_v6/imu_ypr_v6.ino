@@ -20,11 +20,12 @@ bool offsetsSet = false;
 float calAccelX, calAccelY, calAccelZ;
 
 
-// Wi-Fi credentials
-//const char *ssid = "self.object";
-//const char *password = "FRTZ35%%grmnySF";
 const char *ssid = "Mushkins";
 const char *password = "besserbros";
+
+//const char* ssid = "self.object";
+//const char* password = "FRTZ35%%grmnySF";
+
 //const char *ssid = "A-6-168";
 //const char *password = "62488453";
 

@@ -43,7 +43,7 @@ IMU_ESP32_IP = '192.168.68.123'
 IMU_ESP32_PORT = 12345
 MOTORS_ESP32_IP = '192.168.68.101'
 MOTORS_ESP32_PORT = 12345
-VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116" 
+VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116x" 
 VIDEO_ESP32_CAM_URL = "http://192.168.68.116/capture"
 
 # ---Asaph's Network Configuration ---
@@ -444,6 +444,10 @@ def pipeline_consumer(stop_event, buffer):
     print("[Pipeline] Consumer thread started.")
     chunk_index = 0
     while not stop_event.is_set():
+        # --- ADD THESE 2 LINES HERE ---
+        with buffer.lock:
+            print(f"DEBUG: Vis:{len(buffer.visual)} | Mot:{len(buffer.motor)} | IMU:{len(buffer.imu)} | Aud:{len(buffer.audio)}", end='\r')
+        
         chunk = buffer.get_chunk_if_ready(chunk_size=MART_WINDOW_SIZE)
         if chunk:
             process_chunk(chunk, buffer, chunk_index)

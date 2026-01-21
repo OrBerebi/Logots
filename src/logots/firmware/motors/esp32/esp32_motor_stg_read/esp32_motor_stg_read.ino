@@ -1,8 +1,11 @@
 #include <WiFi.h>
 #include <Wire.h>
 
-const char* ssid = "Mushkins";
-const char* password = "besserbros";
+const char *ssid = "Mushkins";
+const char *password = "besserbros";
+
+//const char* ssid = "self.object";
+//const char* password = "FRTZ35%%grmnySF";
 
 WiFiServer wifiServer(12345);
 WiFiClient client;

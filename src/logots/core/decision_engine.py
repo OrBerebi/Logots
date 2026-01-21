@@ -41,10 +41,24 @@ def rule_safety_stop(row):
         }
     return None
 
+def rule_cat_gaze(row):
+    """Rule: If cat is seen, keep it centered in the frame."""
+    if row.get('cat_detected'):
+        return {
+            'rule_name': 'CAT_GAZE',
+            'priority': 5, # Lower priority than Greeting (10) or Safety (99)
+            'proposed_decision': 'center_gaze',
+            'trigger_values': {
+                'cat_x': row.get('cat_position_x')
+            }
+        }
+    return None
+    
 # Registry of available rules
 RULE_REGISTRY = [
     rule_safety_stop,
-    rule_cat_greeting
+    rule_cat_greeting,
+    rule_cat_gaze
 ]
 
 def build_immediate_decisions(experiences_df):
@@ -131,13 +145,35 @@ def def_back_off(trigger_experience):
 def def_placeholder(trigger_experience):
     return {"action": "no_motor_action", "parameters": {}}
 
+def def_center_gaze(trigger_experience):
+    """Goal: Rotate the robot to center the cat without moving forward."""
+    curr_x = trigger_experience.get('cat_position_x')
+    
+    if pd.notna(curr_x):
+        # Calculate pixel error from center (640 / 2)
+        error_x_pixels = (FRAME_WIDTH / 2) - curr_x
+        # Convert pixel error to rotation degrees
+        turn_deg = error_x_pixels / PIXELS_PER_DEG
+    else:
+        turn_deg = 0.0 
+
+    return {
+        "action": "move_sequence",
+        "description": "Gaze: Pivoting to center cat",
+        "parameters": {
+            "move_forward_cm": 0.0, # Do not move forward
+            "rotate_deg": float(turn_deg)
+        }
+    }
+
 # Decision to Action Router
 DECISION_DEFINITIONS = {
     'get_closer': def_get_closer,
     'back_off': def_back_off,
     'send_user_text': def_placeholder,
     'send_user_picture': def_placeholder,
-    'play_arm': def_placeholder
+    'play_arm': def_placeholder,
+    'center_gaze': def_center_gaze
 }
 
 def get_action_parameters(decision_type, experience_row):

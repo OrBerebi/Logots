@@ -13,6 +13,9 @@
 const char *ssid = "Mushkins";
 const char *password = "besserbros";
 
+//const char* ssid = "self.object";
+//const char* password = "FRTZ35%%grmnySF";
+
 void startCameraServer();
 void setupLedFlash(int pin);
 

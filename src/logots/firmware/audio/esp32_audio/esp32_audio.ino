@@ -1,11 +1,12 @@
 #include "AudioTools.h"
 #include <WiFi.h>
 
-// Wi-Fi credentials
-//const char *ssid = "self.object";
-//const char *password = "FRTZ35%%grmnySF";
 const char *ssid = "Mushkins";
 const char *password = "besserbros";
+
+//const char* ssid = "self.object";
+//const char* password = "FRTZ35%%grmnySF";
+
 //const char *ssid = "A-6-168";
 //const char *password = "62488453";
 unsigned long lastDebugPrint = 0; // for throttling debug prints
