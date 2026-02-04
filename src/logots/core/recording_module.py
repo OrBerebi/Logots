@@ -57,7 +57,6 @@ MOTORS_ESP32_PORT = 12345
 VIDEO_ESP32_CAM_IP_SET_RES = "192.168.178.100" 
 VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture"
 
-
 # --- GLOBAL CONTROL STATE ---
 # Manual Control (From GUI)
 current_motor_command = (0, 0, 90)
