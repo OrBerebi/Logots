@@ -189,7 +189,7 @@ DECISION_DEFINITIONS = {
     'back_off': def_back_off,
     'send_user_text': def_placeholder,
     'send_user_picture': def_placeholder,
-    'play_arm': def_play_arm  # Replaced placeholder with the new function
+    'play_arm': def_play_arm,
     'center_gaze': def_center_gaze
 }
 
