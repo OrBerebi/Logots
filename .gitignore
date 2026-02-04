@@ -1,3 +1,6 @@
 .DS_Store
 recording/*
 */__pycache__/*
+recordings/
+__pycache__/
+.ipynb_checkpoints/

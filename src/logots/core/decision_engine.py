@@ -128,6 +128,23 @@ def def_back_off(trigger_experience):
         }
     }
 
+def def_play_arm(trigger_experience):
+    """Goal: Wave the arm 4 times (left and right)."""
+    # We define a list of angles for the wave sequence
+    # Assuming 90 is center, 45 is left, 135 is right
+    wave_sequence = [45, 135, 45, 135, 45, 135, 45, 135, 90]
+    
+    return {
+        "action": "arm_sequence",
+        "description": "Communication: Playful Waving",
+        "parameters": {
+            "arm_path": wave_sequence,
+            "speed": 1.0,
+            "move_forward_cm": 0.0,
+            "rotate_deg": 0.0
+        }
+    }
+
 def def_placeholder(trigger_experience):
     return {"action": "no_motor_action", "parameters": {}}
 
@@ -137,7 +154,7 @@ DECISION_DEFINITIONS = {
     'back_off': def_back_off,
     'send_user_text': def_placeholder,
     'send_user_picture': def_placeholder,
-    'play_arm': def_placeholder
+    'play_arm': def_play_arm  # Replaced placeholder with the new function
 }
 
 def get_action_parameters(decision_type, experience_row):

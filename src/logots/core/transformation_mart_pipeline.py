@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Tuple
 import gc
 import torch
 import os
+import cv2
 
 
 # --- GLOBAL MODEL STATE & CONFIGURATION ---
@@ -385,8 +386,18 @@ def transform_visual(df: pd.DataFrame, device: str = 'cpu') -> pd.DataFrame:
     rows = []
     for _, r in df.iterrows():
         try:
-            rgb = jpeg_b64_to_rgb_ndarray(r['frame_data'], VISUAL_IMG_SIZE)
-            pil = Image.fromarray(rgb)
+            # --- START OPTIMIZATION ---
+            # Check if we have the raw array in memory (fast path)
+            if 'raw_image' in r and isinstance(r['raw_image'], np.ndarray):
+                # Convert BGR (OpenCV) to RGB (PIL) directly
+                rgb = cv2.cvtColor(r['raw_image'], cv2.COLOR_BGR2RGB)
+                pil = Image.fromarray(rgb)
+            else:
+                # Fallback: Decode from Base64 string (original slow path)
+                rgb = jpeg_b64_to_rgb_ndarray(r['frame_data'], VISUAL_IMG_SIZE)
+                pil = Image.fromarray(rgb)
+            # --- END OPTIMIZATION ---
+
         except Exception as e:
             print(f"Warning: Skipping visual frame {r['frame_id']} due to decode error: {e}")
             continue

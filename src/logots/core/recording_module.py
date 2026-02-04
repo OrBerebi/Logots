@@ -18,6 +18,7 @@ from . import transformation_mart_pipeline as t_mart
 from . import visualization_module as viz
 from . import decision_engine as d_engine 
 from . import execution_engine as e_engine
+from . import voice_command_module as vcm
 
 # --- Configuration ---
 FPS = 4
@@ -37,26 +38,24 @@ ACTION_CSV_FILE = 'recordings/mrt_decisions_to_actions.csv'
 GEN_MOTOR_CSV_FILE = 'recordings/mrt_generated_motor.csv'
 
 # ---Darab's Network Configuration ---
-AUDIO_ESP32_IP = '192.168.68.100'
-AUDIO_ESP32_PORT = 12345
-IMU_ESP32_IP = '192.168.68.123'
-IMU_ESP32_PORT = 12345
-MOTORS_ESP32_IP = '192.168.68.101'
-MOTORS_ESP32_PORT = 12345
-VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116" 
-VIDEO_ESP32_CAM_URL = "http://192.168.68.116/capture"
+# AUDIO_ESP32_IP = '192.168.68.100'
+# AUDIO_ESP32_PORT = 12345
+# IMU_ESP32_IP = '192.168.68.123'
+# IMU_ESP32_PORT = 12345
+# MOTORS_ESP32_IP = '192.168.68.101'
+# MOTORS_ESP32_PORT = 12345
+# VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116x" 
+# VIDEO_ESP32_CAM_URL = "http://192.168.68.116/capture"
 
 # ---Asaph's Network Configuration ---
-# AUDIO_ESP32_IP = '192.168.178.117'
-# AUDIO_ESP32_PORT = 12345
-# IMU_ESP32_IP = '192.168.178.111'
-# IMU_ESP32_PORT = 12345
-# MOTORS_ESP32_IP = '192.168.178.118'
-# MOTORS_ESP32_PORT = 12345
-# VIDEO_ESP32_CAM_IP_SET_RES = "192.168.178.100" 
-# VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture"
-
-
+AUDIO_ESP32_IP = '192.168.178.117'
+AUDIO_ESP32_PORT = 12345
+IMU_ESP32_IP = '192.168.178.111'
+IMU_ESP32_PORT = 12345
+MOTORS_ESP32_IP = '192.168.178.118'
+MOTORS_ESP32_PORT = 12345
+VIDEO_ESP32_CAM_IP_SET_RES = "192.168.178.100" 
+VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture"
 
 
 # --- GLOBAL CONTROL STATE ---
@@ -104,7 +103,11 @@ class ThreadSafeBuffer:
     def __init__(self):
         self.lock = threading.Lock()
         self.motor = []
-        self.audio = [] 
+        
+        # Split Audio Buffers
+        self.audio_pipeline = []  # For the Context/Mart layer
+        self.audio_voice = []     # For the Voice Command layer
+        
         self.imu = []
         self.visual = []
         
@@ -128,15 +131,23 @@ class ThreadSafeBuffer:
         self.master_actions = pd.DataFrame()
         self.master_gen_motor = pd.DataFrame()
 
+    def add_audio(self, samples, timestamp):
+        with self.lock:
+            data_points = [(timestamp, s) for s in samples]
+            # Feed both buffers
+            self.audio_pipeline.extend(data_points)
+            self.audio_voice.extend(data_points)
+            
+            # Safety: Prevent Voice buffer from getting too big
+            if len(self.audio_voice) > 80000:
+                self.audio_voice = self.audio_voice[-80000:]
+            
+            self.acc_audio_raw.extend(samples)
+
     def add_motor(self, data):
         with self.lock:
             self.motor.append(data)
             self.acc_motor.append(data)
-
-    def add_audio(self, samples, timestamp):
-        with self.lock:
-            self.audio.extend([(timestamp, s) for s in samples])
-            self.acc_audio_raw.extend(samples)
 
     def add_imu(self, data):
         with self.lock:
@@ -161,9 +172,10 @@ class ThreadSafeBuffer:
                 chunk_imu = [x for x in self.imu if x['timestamp'] <= end_t]
                 self.imu = [x for x in self.imu if x['timestamp'] > end_t] 
                 
+                # Consume ONLY the Pipeline Buffer
                 target_audio_samples = int(chunk_size * (AUDIO_SAMPLE_RATE / FPS))
-                chunk_aud_tuples = self.audio[:target_audio_samples]
-                self.audio = self.audio[target_audio_samples:]
+                chunk_aud_tuples = self.audio_pipeline[:target_audio_samples]
+                self.audio_pipeline = self.audio_pipeline[target_audio_samples:]
 
                 return {'visual': chunk_vis, 'motor': chunk_mot, 'imu': chunk_imu, 'audio': chunk_aud_tuples}
             return None
@@ -321,7 +333,10 @@ class VideoStreamProducer(threading.Thread):
                         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                         
                         self.buffer.add_visual({
-                            "frame_id": frame_id, "timestamp": ts, "frame_data": b64
+                            "frame_id": frame_id, 
+                            "timestamp": ts, 
+                            "frame_data": b64,
+                            "raw_image": resized  # <--- NEW: Store the raw array here!
                         }, resized) 
                         frame_id += 1
             except Exception: pass
@@ -343,26 +358,31 @@ def process_chunk(chunk_data, buffer, chunk_index):
         df_mot = pd.DataFrame(chunk_data['motor'])
         df_imu = pd.DataFrame(chunk_data['imu'])
         
-        # Audio Prep
+        # --- Audio Prep: Final Architectural Fix ---
         samples_only = [x[1] for x in chunk_data['audio']]
-        if len(df_vis) > 0 and len(samples_only) > 0:
-            raw_arr = np.array(samples_only, dtype=np.int16)
-            norm_arr = normalize_to_rms(raw_arr, target_rms=2000)
-            norm_samples = norm_arr.tolist()
-            
-            s_per_f = len(norm_samples) // len(df_vis)
-            audio_rows = []
-            for i in range(len(df_vis)):
-                start_i, end_i = i * s_per_f, (i+1) * s_per_f
-                if i == len(df_vis) - 1: end_i = len(norm_samples)
-                audio_rows.append({
-                    "frame_id": df_vis.iloc[i]['frame_id'], 
-                    "timestamp": df_vis.iloc[i]['timestamp'], 
-                    "audio_samples": norm_samples[start_i:end_i]
-                })
-            df_aud = pd.DataFrame(audio_rows)
+        
+        # We MUST ensure the DataFrame has 'frame_id' to align with the Mart
+        if len(df_vis) > 0:
+            if len(samples_only) > 0:
+                norm_samples = normalize_to_rms(np.array(samples_only, dtype=np.int16), target_rms=2000).tolist()
+                s_per_f = len(norm_samples) // len(df_vis)
+                audio_rows = []
+                for i in range(len(df_vis)):
+                    start_i, end_i = i * s_per_f, (i+1) * s_per_f
+                    if i == len(df_vis) - 1: end_i = len(norm_samples)
+                    audio_rows.append({
+                        "frame_id": df_vis.iloc[i]['frame_id'], 
+                        "timestamp": df_vis.iloc[i]['timestamp'], 
+                        "audio_samples": norm_samples[start_i:end_i]
+                    })
+                df_aud = pd.DataFrame(audio_rows)
+            else:
+                # Sensor is off: Provide an empty-sample row for every visual frame to keep the Mart alive
+                df_aud = pd.DataFrame([{
+                    "frame_id": f_id, "timestamp": ts, "audio_samples": []
+                } for f_id, ts in zip(df_vis['frame_id'], df_vis['timestamp'])])
         else:
-            df_aud = pd.DataFrame()
+            df_aud = pd.DataFrame(columns=['frame_id', 'timestamp', 'audio_samples'])
 
         # 2. Transformation
         trans_vis = t_mart.transform_visual(df_vis)
@@ -440,10 +460,77 @@ def process_chunk(chunk_data, buffer, chunk_index):
         import traceback
         traceback.print_exc()
 
+def voice_command_consumer(stop_event, buffer):
+    print("\n[Voice] Command listener started.")
+    while not stop_event.is_set():
+        audio_snapshot = []
+        with buffer.lock:
+            # Use 'audio_voice'
+            if len(buffer.audio_voice) > 32000:
+                audio_snapshot = list(buffer.audio_voice)
+                buffer.audio_voice = buffer.audio_voice[16000:] 
+
+        if audio_snapshot:
+            try:
+                raw_samples = np.array([x[1] for x in audio_snapshot], dtype=np.int16)
+                norm_samples = normalize_to_rms(raw_samples, target_rms=12000)
+                norm_tuples = [(None, s) for s in norm_samples]
+                
+                print("\n", end="") 
+
+                mart_comm = vcm.listen_and_propose_decision(norm_tuples)
+                
+                if not mart_comm.empty:
+                    d_type = mart_comm.iloc[0]['decision_type']
+                    with buffer.lock:
+                        buffer.audio_voice = []  # Wipe the ear clean
+                    text = mart_comm.iloc[0]['text_heard']
+                    print(f"📢 VOICE COMMAND DETECTED: {d_type}")
+
+                    action_params = d_engine.get_action_parameters(d_type, {})
+                    d_id = int(time.time())
+                    raw_ts_obj = datetime.now()
+
+                    action_row = pd.DataFrame([{
+                        'decision_id': d_id,
+                        'timestamp': raw_ts_obj, 
+                        'source_module': 'mrt_communicate_user',
+                        'source_event_id': 'v_' + str(d_id),
+                        'experience_id': 0,
+                        'decision_type': d_type,
+                        'parameters': json.dumps(action_params['parameters']),
+                        'trigger_values': json.dumps({'voice_command': text})
+                    }])
+
+                    motor_gen = e_engine.build_mrt_motor(action_row)
+                    
+                    action_row['timestamp'] = action_row['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+                    motor_gen['timestamp'] = pd.to_datetime(motor_gen['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+                    
+                    motor_gen['source'] = 'mrt_decisions_to_actions'
+                    motor_gen['decision_id'] = d_id
+
+                    with buffer.lock:
+                        buffer.master_actions = pd.concat([buffer.master_actions, action_row], ignore_index=True)
+                        buffer.master_gen_motor = pd.concat([buffer.master_gen_motor, motor_gen], ignore_index=True)
+                    
+                    for _, row in motor_gen.iterrows():
+                        BRAIN_COMMAND_QUEUE.put((int(row['left_pwm']), int(row['right_pwm']), int(row['arm_angle'])))
+
+            except Exception as e:
+                print(f"🛑 Voice Error: {e}")
+                import traceback
+                traceback.print_exc()
+        time.sleep(0.4)
+
 def pipeline_consumer(stop_event, buffer):
     print("[Pipeline] Consumer thread started.")
     chunk_index = 0
     while not stop_event.is_set():
+        with buffer.lock:
+            # Debug using 'audio_pipeline'
+            print(f"DEBUG: Vis:{len(buffer.visual)} | Mot:{len(buffer.motor)} | IMU:{len(buffer.imu)} | Aud:{len(buffer.audio_pipeline)}", end='\r')
+        
         chunk = buffer.get_chunk_if_ready(chunk_size=MART_WINDOW_SIZE)
         if chunk:
             process_chunk(chunk, buffer, chunk_index)
@@ -480,7 +567,10 @@ def run_data_collection(duration_unused, stop_event):
     t_vis = VideoStreamProducer(VIDEO_ESP32_CAM_URL, stop_event, stream_buffer)
     t_pipe = threading.Thread(target=pipeline_consumer, args=(stop_event, stream_buffer), daemon=True)
     
-    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe])
+    # ADD THE VOICE THREAD HERE:
+    t_voice = threading.Thread(target=voice_command_consumer, args=(stop_event, stream_buffer), daemon=True)
+
+    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_voice])
     for t in threads: t.start()
     
     print("✅ System Running. Manual Override Active.")
