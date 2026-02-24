@@ -387,6 +387,7 @@ def process_chunk(chunk_data, buffer, chunk_index):
         trans_vis = t_mart.transform_visual(df_vis)
         trans_mot = t_mart.transform_motor(df_mot)
         trans_aud = t_mart.transform_audio(df_aud)
+        chunk_transcription = t_mart.trans_audio_transcribe(chunk_data['audio'])
         
         if not df_imu.empty:
             if buffer.last_imu_raw_row is not None:
@@ -411,7 +412,7 @@ def process_chunk(chunk_data, buffer, chunk_index):
         win_imu = get_window(buffer.ctx_trans_imu, trans_imu)
         win_mot = get_window(buffer.ctx_trans_mot, trans_mot)
         
-        mart_full = t_mart.build_mrt_experiences(win_aud, win_imu, win_vis, win_mot, N_FRAMES=MART_WINDOW_SIZE)
+        mart_full = t_mart.build_mrt_experiences(win_aud, win_imu, win_vis, win_mot, N_FRAMES=MART_WINDOW_SIZE, voice_transcription=chunk_transcription)
         
         new_count = len(trans_vis)
         if not mart_full.empty and new_count > 0:

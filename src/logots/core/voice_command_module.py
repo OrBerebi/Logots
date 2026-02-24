@@ -1,15 +1,10 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
-_whisper_model = None
+from . import transformation_mart_pipeline as t_mart
 
 def get_stt_model():
-    global _whisper_model
-    if _whisper_model is None:
-        import whisper
-        _whisper_model = whisper.load_model("tiny", device="mps")
-    return _whisper_model
+    return t_mart.get_whisper_model()
 
 def listen_and_propose_decision(audio_buffer_list):
     if not audio_buffer_list: return pd.DataFrame()
