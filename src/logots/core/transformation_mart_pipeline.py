@@ -262,15 +262,17 @@ def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
         
         try:
             res, audio_buffer = process_audio_frame(row_data, audio_buffer, pipe)
+            res['voice_transcription'] = row.get('voice_transcription', '')
             results.append(res)
         except Exception as e:
-            # NOISY PRINT FIX: Suppress per-frame error printing. 
+            # NOISY PRINT FIX: Suppress per-frame error printing.
             # We fail silently and insert a default row to keep the pipeline moving.
             results.append({
-                'frame_id': row['frame_id'], 
-                'timestamp': row['timestamp'], 
-                'is_cat_voice': 0, 'is_human_voice': 0, 
-                'meow_loudness': 'none', 'dominant_frequency': 0.0
+                'frame_id': row['frame_id'],
+                'timestamp': row['timestamp'],
+                'is_cat_voice': 0, 'is_human_voice': 0,
+                'meow_loudness': 'none', 'dominant_frequency': 0.0,
+                'voice_transcription': row.get('voice_transcription', '')
             })
         
         if i % 500 == 0: gc.collect()
@@ -528,7 +530,7 @@ R_SCALE = 0.005
 LOUDNESS_RANK = {'high': 3, 'medium': 2, 'low': 1, 'none': 0}
 RANK_TO_TEXT = {3: 'high', 2: 'medium', 1: 'low', 0: np.nan}
 
-def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd.DataFrame, mot_df: pd.DataFrame, N_FRAMES: int = 12, voice_transcription: str = "") -> pd.DataFrame:
+def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd.DataFrame, mot_df: pd.DataFrame, N_FRAMES: int = 12) -> pd.DataFrame:
     """Assembles the final Data Mart (MRT)."""
     
     aud_df = aud_df.sort_values('frame_id').reset_index(drop=True) if not aud_df.empty and 'frame_id' in aud_df.columns else aud_df
@@ -651,6 +653,9 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
             sum_robot_dist = np.sum(np.abs(dist_steps))
             delta_robot_pos = (local_x, local_y)
 
+        vt_series = aud['voice_transcription'].dropna() if 'voice_transcription' in aud.columns else pd.Series(dtype=str)
+        transcription = vt_series.iloc[-1] if not vt_series.empty else ""
+
         rows.append({
             'experience_id': fid,
             'last_experience_id_array': vis['frame_id'].tolist(),
@@ -673,7 +678,7 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
             'delta_robot_position': delta_robot_pos,
             'sum_robot_position': sum_robot_dist,
             'delta_robot_rotation': delta_robot_rot_deg,
-            'voice_transcription': voice_transcription,
+            'voice_transcription': transcription,
         })
         
     return pd.DataFrame(rows)

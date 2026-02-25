@@ -53,10 +53,31 @@ def rule_cat_gaze(row):
             }
         }
     return None
-    
+
+def rule_voice_command(row):
+    """Rule: Execute voice commands heard in the rolling audio window."""
+    text = (row.get('voice_transcription') or '').lower()
+    if not text:
+        return None
+    if 'back' in text and 'off' in text:
+        decision = 'back_off'
+    elif 'get' in text and 'closer' in text:
+        decision = 'get_closer'
+    elif 'play' in text and 'arm' in text:
+        decision = 'play_arm'
+    else:
+        return None
+    return {
+        'rule_name': 'VOICE_COMMAND',
+        'priority': 50,  # Above cat rules (10), below safety stop (99)
+        'proposed_decision': decision,
+        'trigger_values': {'voice_transcription': text}
+    }
+
 # Registry of available rules
 RULE_REGISTRY = [
     rule_safety_stop,
+    rule_voice_command,
     rule_cat_greeting,
     rule_cat_gaze
 ]

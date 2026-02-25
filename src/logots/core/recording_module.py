@@ -14,11 +14,10 @@ import requests
 import queue # Import queue for the Brain Buffer
 
 # --- Custom Modules ---
-from . import transformation_mart_pipeline as t_mart 
+from . import transformation_mart_pipeline as t_mart
 from . import visualization_module as viz
-from . import decision_engine as d_engine 
+from . import decision_engine as d_engine
 from . import execution_engine as e_engine
-from . import voice_command_module as vcm
 
 # --- Configuration ---
 FPS = 4
@@ -104,8 +103,12 @@ class ThreadSafeBuffer:
         self.motor = []
         
         # Split Audio Buffers
-        self.audio_pipeline = []  # For the Context/Mart layer
-        self.audio_voice = []     # For the Voice Command layer
+        self.audio_pipeline = []    # For the Context/Mart layer
+        self.audio_voice = []       # For the Voice Command layer (legacy, unused)
+        self.audio_transcribe = []  # For the rolling-window transcription producer
+
+        # Transcription history: [(seq_id, text), ...]
+        self.transcription_history = []
         
         self.imu = []
         self.visual = []
@@ -133,14 +136,17 @@ class ThreadSafeBuffer:
     def add_audio(self, samples, timestamp):
         with self.lock:
             data_points = [(timestamp, s) for s in samples]
-            # Feed both buffers
+            # Feed all three audio buffers
             self.audio_pipeline.extend(data_points)
             self.audio_voice.extend(data_points)
-            
-            # Safety: Prevent Voice buffer from getting too big
+            self.audio_transcribe.extend(data_points)
+
+            # Safety caps to prevent unbounded growth
             if len(self.audio_voice) > 80000:
                 self.audio_voice = self.audio_voice[-80000:]
-            
+            if len(self.audio_transcribe) > 80000:
+                self.audio_transcribe = self.audio_transcribe[-80000:]
+
             self.acc_audio_raw.extend(samples)
 
     def add_motor(self, data):
@@ -274,6 +280,46 @@ def stream_audio(stop_event, buffer):
     finally:
         client_socket.close()
 
+def audio_transcription_producer(stop_event, buffer):
+    """
+    Dedicated daemon thread: maintains a rolling 12-frame audio window and runs
+    Whisper once per incoming audio frame (~4fps). Results are stored in
+    buffer.transcription_history for process_chunk to read.
+    """
+    print("[Transcribe] Producer thread started.")
+    SAMPLES_PER_FRAME = int(AUDIO_SAMPLE_RATE / FPS)       # 4000 samples / frame
+    WINDOW_SAMPLES = MART_WINDOW_SIZE * SAMPLES_PER_FRAME  # 48000 samples (12 frames)
+
+    rolling_window = []
+    seq_id = 0
+
+    while not stop_event.is_set():
+        new_samples = []
+        with buffer.lock:
+            if len(buffer.audio_transcribe) >= SAMPLES_PER_FRAME:
+                batch = buffer.audio_transcribe[:SAMPLES_PER_FRAME]
+                buffer.audio_transcribe = buffer.audio_transcribe[SAMPLES_PER_FRAME:]
+                new_samples = [x[1] for x in batch]
+
+        if new_samples:
+            rolling_window.extend(new_samples)
+            if len(rolling_window) > WINDOW_SAMPLES:
+                rolling_window = rolling_window[-WINDOW_SAMPLES:]
+
+            # Pass as (timestamp, sample) tuples — timestamp not used by Whisper
+            window_tuples = [(None, s) for s in rolling_window]
+            text = t_mart.trans_audio_transcribe(window_tuples)
+
+            with buffer.lock:
+                buffer.transcription_history.append((seq_id, text))
+                # Prevent unbounded growth; keep last 200 transcriptions
+                if len(buffer.transcription_history) > 200:
+                    buffer.transcription_history = buffer.transcription_history[-200:]
+            seq_id += 1
+        else:
+            time.sleep(0.01)
+
+
 def stream_imu(stop_event, buffer):
     print("[Stream] IMU thread started.")
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -383,11 +429,19 @@ def process_chunk(chunk_data, buffer, chunk_index):
         else:
             df_aud = pd.DataFrame(columns=['frame_id', 'timestamp', 'audio_samples'])
 
+        # Add voice_transcription column to df_aud from rolling transcription history
+        with buffer.lock:
+            recent_transcriptions = list(buffer.transcription_history[-len(df_aud):])
+        texts = [t for _, t in recent_transcriptions]
+        while len(texts) < len(df_aud):
+            texts = [""] + texts
+        df_aud = df_aud.copy()
+        df_aud['voice_transcription'] = texts
+
         # 2. Transformation
         trans_vis = t_mart.transform_visual(df_vis)
         trans_mot = t_mart.transform_motor(df_mot)
         trans_aud = t_mart.transform_audio(df_aud)
-        chunk_transcription = t_mart.trans_audio_transcribe(chunk_data['audio'])
         
         if not df_imu.empty:
             if buffer.last_imu_raw_row is not None:
@@ -412,7 +466,7 @@ def process_chunk(chunk_data, buffer, chunk_index):
         win_imu = get_window(buffer.ctx_trans_imu, trans_imu)
         win_mot = get_window(buffer.ctx_trans_mot, trans_mot)
         
-        mart_full = t_mart.build_mrt_experiences(win_aud, win_imu, win_vis, win_mot, N_FRAMES=MART_WINDOW_SIZE, voice_transcription=chunk_transcription)
+        mart_full = t_mart.build_mrt_experiences(win_aud, win_imu, win_vis, win_mot, N_FRAMES=MART_WINDOW_SIZE)
         
         new_count = len(trans_vis)
         if not mart_full.empty and new_count > 0:
@@ -460,69 +514,6 @@ def process_chunk(chunk_data, buffer, chunk_index):
         import traceback
         traceback.print_exc()
 
-def voice_command_consumer(stop_event, buffer):
-    print("\n[Voice] Command listener started.")
-    while not stop_event.is_set():
-        audio_snapshot = []
-        with buffer.lock:
-            # Use 'audio_voice'
-            if len(buffer.audio_voice) > 32000:
-                audio_snapshot = list(buffer.audio_voice)
-                buffer.audio_voice = buffer.audio_voice[16000:] 
-
-        if audio_snapshot:
-            try:
-                raw_samples = np.array([x[1] for x in audio_snapshot], dtype=np.int16)
-                norm_samples = normalize_to_rms(raw_samples, target_rms=12000)
-                norm_tuples = [(None, s) for s in norm_samples]
-                
-                print("\n", end="") 
-
-                mart_comm = vcm.listen_and_propose_decision(norm_tuples)
-                
-                if not mart_comm.empty:
-                    d_type = mart_comm.iloc[0]['decision_type']
-                    with buffer.lock:
-                        buffer.audio_voice = []  # Wipe the ear clean
-                    text = mart_comm.iloc[0]['text_heard']
-                    print(f"📢 VOICE COMMAND DETECTED: {d_type}")
-
-                    action_params = d_engine.get_action_parameters(d_type, {})
-                    d_id = int(time.time())
-                    raw_ts_obj = datetime.now()
-
-                    action_row = pd.DataFrame([{
-                        'decision_id': d_id,
-                        'timestamp': raw_ts_obj, 
-                        'source_module': 'mrt_communicate_user',
-                        'source_event_id': 'v_' + str(d_id),
-                        'experience_id': 0,
-                        'decision_type': d_type,
-                        'parameters': json.dumps(action_params['parameters']),
-                        'trigger_values': json.dumps({'voice_command': text})
-                    }])
-
-                    motor_gen = e_engine.build_mrt_motor(action_row)
-                    
-                    action_row['timestamp'] = action_row['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S.%f')
-                    motor_gen['timestamp'] = pd.to_datetime(motor_gen['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S.%f')
-                    
-                    motor_gen['source'] = 'mrt_decisions_to_actions'
-                    motor_gen['decision_id'] = d_id
-
-                    with buffer.lock:
-                        buffer.master_actions = pd.concat([buffer.master_actions, action_row], ignore_index=True)
-                        buffer.master_gen_motor = pd.concat([buffer.master_gen_motor, motor_gen], ignore_index=True)
-                    
-                    for _, row in motor_gen.iterrows():
-                        BRAIN_COMMAND_QUEUE.put((int(row['left_pwm']), int(row['right_pwm']), int(row['arm_angle'])))
-
-            except Exception as e:
-                print(f"🛑 Voice Error: {e}")
-                import traceback
-                traceback.print_exc()
-        time.sleep(0.4)
-
 def pipeline_consumer(stop_event, buffer):
     print("[Pipeline] Consumer thread started.")
     chunk_index = 0
@@ -566,11 +557,9 @@ def run_data_collection(duration_unused, stop_event):
     t_imu = threading.Thread(target=stream_imu, args=(stop_event, stream_buffer), daemon=True)
     t_vis = VideoStreamProducer(VIDEO_ESP32_CAM_URL, stop_event, stream_buffer)
     t_pipe = threading.Thread(target=pipeline_consumer, args=(stop_event, stream_buffer), daemon=True)
-    
-    # ADD THE VOICE THREAD HERE:
-    t_voice = threading.Thread(target=voice_command_consumer, args=(stop_event, stream_buffer), daemon=True)
+    t_transcribe = threading.Thread(target=audio_transcription_producer, args=(stop_event, stream_buffer), daemon=True)
 
-    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_voice])
+    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_transcribe])
     for t in threads: t.start()
     
     print("✅ System Running. Manual Override Active.")
