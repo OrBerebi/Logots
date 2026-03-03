@@ -311,8 +311,6 @@ def trans_audio_transcribe(chunk_audio_tuples: list) -> str:
         model = get_whisper_model()
         result = model.transcribe(samples, fp16=False)
         text = result['text'].strip()
-        if text:
-            print(f"[Transcribe] '{text}'")
         return text
     except Exception as e:
         print(f"[Transcribe] Error: {e}")
@@ -656,6 +654,9 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
         vt_series = aud['voice_transcription'].dropna() if 'voice_transcription' in aud.columns else pd.Series(dtype=str)
         transcription = vt_series.iloc[-1] if not vt_series.empty else ""
 
+        sid_series = aud['transcription_seq_id'].dropna() if 'transcription_seq_id' in aud.columns else pd.Series(dtype=object)
+        transcription_seq_id = sid_series.iloc[-1] if not sid_series.empty else None
+
         rows.append({
             'experience_id': fid,
             'last_experience_id_array': vis['frame_id'].tolist(),
@@ -679,6 +680,7 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
             'sum_robot_position': sum_robot_dist,
             'delta_robot_rotation': delta_robot_rot_deg,
             'voice_transcription': transcription,
+            'transcription_seq_id': transcription_seq_id,
         })
         
     return pd.DataFrame(rows)

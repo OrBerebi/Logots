@@ -82,38 +82,69 @@ RULE_REGISTRY = [
     rule_cat_gaze
 ]
 
+# Tracks the currently-active voice command so we fire it only on the first
+# experience row where it appears, then suppress until the utterance leaves
+# the rolling window (i.e. no VOICE_COMMAND fires for a whole chunk).
+_active_voice_decision = None  # e.g. "back_off", "play_arm", or None
+
+def reset_voice_dedup():
+    """Clear the voice-command deduplication state (call when recording restarts)."""
+    global _active_voice_decision
+    _active_voice_decision = None
+
 def build_immediate_decisions(experiences_df):
     """Iterates through experiences and fires rules."""
+    global _active_voice_decision
     decisions = []
-    
+
     if experiences_df.empty:
         return pd.DataFrame()
+
+    voice_cmd_seen_this_chunk = False
 
     for _, row in experiences_df.iterrows():
         # 1. Skip invalid timestamps
         if pd.isna(row['timestamp']):
             continue
-            
+
         # 2. Run Registry
         potential_decisions = []
         for rule_func in RULE_REGISTRY:
             res = rule_func(row)
             if res:
                 potential_decisions.append(res)
-        
+
         # 3. Conflict Resolution (Highest Priority wins)
         if potential_decisions:
             best_decision = sorted(potential_decisions, key=lambda x: x['priority'], reverse=True)[0]
-            
+
+            # 4. Deduplicate voice commands using a latch:
+            #    - First time a voice command fires → emit it, set the latch
+            #    - Same decision still firing → suppress (same utterance in window)
+            #    - Different voice decision → new utterance, emit it, update latch
+            if best_decision['rule_name'] == 'VOICE_COMMAND':
+                voice_cmd_seen_this_chunk = True
+                proposed = best_decision['proposed_decision']
+                if proposed == _active_voice_decision:
+                    # Same utterance still in the rolling window — suppress
+                    continue
+                # New voice command (or first one) — allow and latch
+                _active_voice_decision = proposed
+
             decisions.append({
                 'immed_id': str(uuid.uuid4())[:8],
-                'timestamp': datetime.now(), 
+                'timestamp': datetime.now(),
                 'experience_id': row['experience_id'],
                 'rule_name': best_decision['rule_name'],
                 'trigger_values': json.dumps(best_decision['trigger_values']),
                 'proposed_decision': best_decision['proposed_decision']
             })
-            
+
+    # If no voice command fired in this entire chunk, the utterance has
+    # left the rolling window — clear the latch so the next one can fire.
+    if not voice_cmd_seen_this_chunk:
+        _active_voice_decision = None
+
     return pd.DataFrame(decisions)
 
 

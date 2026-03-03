@@ -429,14 +429,17 @@ def process_chunk(chunk_data, buffer, chunk_index):
         else:
             df_aud = pd.DataFrame(columns=['frame_id', 'timestamp', 'audio_samples'])
 
-        # Add voice_transcription column to df_aud from rolling transcription history
+        # Add voice_transcription and transcription_seq_id columns to df_aud from rolling transcription history
         with buffer.lock:
             recent_transcriptions = list(buffer.transcription_history[-len(df_aud):])
+        seq_ids = [sid for sid, _ in recent_transcriptions]
         texts = [t for _, t in recent_transcriptions]
         while len(texts) < len(df_aud):
+            seq_ids = [None] + seq_ids
             texts = [""] + texts
         df_aud = df_aud.copy()
         df_aud['voice_transcription'] = texts
+        df_aud['transcription_seq_id'] = seq_ids
 
         # 2. Transformation
         trans_vis = t_mart.transform_visual(df_vis)
@@ -544,7 +547,8 @@ def pipeline_consumer(stop_event, buffer):
 
 def run_data_collection(duration_unused, stop_event):
     print("\n=== Starting Robot Stream Pipeline (Full Closed Loop) ===")
-    
+    d_engine.reset_voice_dedup()
+
     stream_buffer = ThreadSafeBuffer()
     configure_camera(VIDEO_ESP32_CAM_IP_SET_RES, framesize_val=FRAMESIZE_VAL, quality_val=QUALITY_VAL)
     

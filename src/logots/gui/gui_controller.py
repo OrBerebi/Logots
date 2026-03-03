@@ -96,11 +96,13 @@ class RecorderGUI:
             t_mart.get_visual_model()
             
             # 2. Load Audio Model (AST Transformer)
-            # This will now trigger the download/load into memory immediately
-            t_mart.get_audio_model() 
-            
+            t_mart.get_audio_model()
+
+            # 3. Load Whisper Model (Audio Transcription)
+            t_mart.get_whisper_model()
+
             # Update UI on Main Thread
-            self.root.after(0, lambda: self.model_status_label.config(text="✅ Vision & Audio AI: Ready", fg="green"))
+            self.root.after(0, lambda: self.model_status_label.config(text="✅ Vision, Audio & Whisper AI: Ready", fg="green"))
             
         except Exception as e:
             print(f"Model Load Error: {e}")
@@ -137,9 +139,14 @@ class RecorderGUI:
 
     def run_collection(self, safety_duration):
         rm.run_data_collection(safety_duration, self.stop_event)
-        
-        # When rm returns (after stop is pressed), reset UI
-        self.root.after(0, self.on_recording_finished)
+
+        # When rm returns (after stop is pressed), reset UI.
+        # The main loop may already be gone if the user closed the window,
+        # so guard against RuntimeError from Tkinter.
+        try:
+            self.root.after(0, self.on_recording_finished)
+        except RuntimeError:
+            pass
 
     def stop_recording(self):
         self.stop_event.set()
@@ -173,6 +180,16 @@ class RecorderGUI:
 def main():
     root = tk.Tk()
     app = RecorderGUI(root)
+
+    def on_close():
+        """Cleanly shut down background threads before destroying the window."""
+        if app.running:
+            app.stop_event.set()
+            if app.thread is not None:
+                app.thread.join(timeout=5.0)
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()
 
 if __name__ == "__main__":

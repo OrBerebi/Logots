@@ -1,24 +1,3 @@
 immed_id,timestamp,experience_id,rule_name,trigger_values,proposed_decision
-29f37609,2026-02-04 10:48:31.428296,0,CAT_GAZE,"{""cat_x"": 476.9737854003906}",center_gaze
-ae9eac52,2026-02-04 10:48:31.428350,1,CAT_GAZE,"{""cat_x"": 438.80047607421875}",center_gaze
-00de0d29,2026-02-04 10:48:31.428388,2,CAT_GAZE,"{""cat_x"": 380.9662780761719}",center_gaze
-8f170f6b,2026-02-04 10:48:31.428422,3,CAT_GAZE,"{""cat_x"": 350.72271728515625}",center_gaze
-2edb22a2,2026-02-04 10:48:31.428458,4,CAT_GAZE,"{""cat_x"": 343.3760986328125}",center_gaze
-652b29ec,2026-02-04 10:48:31.428501,5,CAT_GAZE,"{""cat_x"": 346.5665283203125}",center_gaze
-8d7e4dc3,2026-02-04 10:48:33.866476,16,CAT_GAZE,"{""cat_x"": 310.9483642578125}",center_gaze
-1df66ab6,2026-02-04 10:48:33.866564,20,CAT_GAZE,"{""cat_x"": 361.041748046875}",center_gaze
-4150766d,2026-02-04 10:48:33.866608,22,CAT_GAZE,"{""cat_x"": 359.78228759765625}",center_gaze
-a962dc29,2026-02-04 10:48:36.962895,27,CAT_GAZE,"{""cat_x"": 410.2558898925781}",center_gaze
-f286a9d0,2026-02-04 10:48:36.962968,30,CAT_GAZE,"{""cat_x"": 359.04498291015625}",center_gaze
-dcc90741,2026-02-04 10:48:36.963027,33,CAT_GAZE,"{""cat_x"": 417.4290466308594}",center_gaze
-3d8aa58f,2026-02-04 10:48:36.963054,34,CAT_GAZE,"{""cat_x"": 360.0142822265625}",center_gaze
-041a2354,2026-02-04 10:48:39.700929,36,CAT_GAZE,"{""cat_x"": 360.4380798339844}",center_gaze
-a3201a0f,2026-02-04 10:48:39.701024,39,CAT_GAZE,"{""cat_x"": 353.612548828125}",center_gaze
-7be0c063,2026-02-04 10:48:39.701097,42,CAT_GAZE,"{""cat_x"": 360.4485168457031}",center_gaze
-bff9a954,2026-02-04 10:48:39.701145,44,CAT_GAZE,"{""cat_x"": 358.2349853515625}",center_gaze
-ab4c6fac,2026-02-04 10:48:39.701174,45,CAT_GAZE,"{""cat_x"": 357.81842041015625}",center_gaze
-bd475aa1,2026-02-04 10:48:42.939370,51,CAT_GAZE,"{""cat_x"": 352.72357177734375}",center_gaze
-de25d4e3,2026-02-04 10:48:42.939479,56,CAT_GAZE,"{""cat_x"": 350.5559997558594}",center_gaze
-9755d6a3,2026-02-04 10:48:42.939509,57,CAT_GAZE,"{""cat_x"": 354.0665588378906}",center_gaze
-5c9f21b9,2026-02-04 10:48:42.939552,59,CAT_GAZE,"{""cat_x"": 351.2386474609375}",center_gaze
-9180d8e1,2026-02-04 10:48:45.780447,61,CAT_GAZE,"{""cat_x"": 462.891357421875}",center_gaze
+fb02b987,2026-03-03 20:35:58.820711,22,VOICE_COMMAND,"{""voice_transcription"": ""back off.""}",back_off
+830a35c7,2026-03-03 20:36:11.095147,65,VOICE_COMMAND,"{""voice_transcription"": ""some friends and they said something like play arm or""}",play_arm
