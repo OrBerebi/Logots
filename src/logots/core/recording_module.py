@@ -18,6 +18,7 @@ from . import transformation_mart_pipeline as t_mart
 from . import visualization_module as viz
 from . import decision_engine as d_engine
 from . import execution_engine as e_engine
+from . import mrt_reflective_decisions as mrd
 
 # --- Configuration ---
 FPS = 4
@@ -562,8 +563,9 @@ def run_data_collection(duration_unused, stop_event):
     t_vis = VideoStreamProducer(VIDEO_ESP32_CAM_URL, stop_event, stream_buffer)
     t_pipe = threading.Thread(target=pipeline_consumer, args=(stop_event, stream_buffer), daemon=True)
     t_transcribe = threading.Thread(target=audio_transcription_producer, args=(stop_event, stream_buffer), daemon=True)
+    t_reflect = threading.Thread(target=mrd.reflective_decision_loop, args=(stop_event, stream_buffer), daemon=True)
 
-    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_transcribe])
+    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_transcribe, t_reflect])
     for t in threads: t.start()
     
     print("✅ System Running. Manual Override Active.")

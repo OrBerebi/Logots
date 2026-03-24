@@ -506,6 +506,8 @@ def compute_motor_vectors(left_pwm: float, right_pwm: float) -> Tuple[float, flo
 
 def transform_motor(df: pd.DataFrame) -> pd.DataFrame:
     """Main transformation function for the motor data (stateless)."""
+    if df.empty or 'frame_id' not in df.columns:
+        return pd.DataFrame(columns=['frame_id', 'timestamp', 'thrust_velocity', 'rotation_velocity', 'arm_angle'])
     features = df[['frame_id', 'timestamp']].copy()
 
     vectors = df.apply(

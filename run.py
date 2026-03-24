@@ -1,5 +1,11 @@
 import sys
 import os
+import warnings
+from dotenv import load_dotenv
+
+warnings.filterwarnings("ignore", message=".*swapaxes.*", category=FutureWarning)
+
+load_dotenv()  # loads .env into os.environ
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
