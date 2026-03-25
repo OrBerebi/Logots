@@ -24,6 +24,8 @@ VISUAL_IMG_SIZE = 640
 
 # --- GLOBALS ---
 _audio_pipe = None
+_whisper_model = None
+_whisper_lock = threading.Lock()
 
 def get_visual_model(device: str = 'mps'): 
     """Initializes or returns the singleton YOLO model."""
@@ -85,6 +87,19 @@ def safe_literal_eval(val):
         except (ValueError, SyntaxError):
             return val # Return raw string if parse fails
     return val
+
+def get_whisper_model():
+    """Initializes or returns the singleton Whisper tiny model (thread-safe)."""
+    global _whisper_model
+    with _whisper_lock:
+        if _whisper_model is None:
+            import whisper
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            print(f"Loading Whisper tiny model on {device}...")
+            _whisper_model = whisper.load_model("tiny", device=device)
+            print("✅ Whisper model loaded.")
+    return _whisper_model
+
 
 def get_audio_model(device=None):
     """
@@ -247,21 +262,59 @@ def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
         
         try:
             res, audio_buffer = process_audio_frame(row_data, audio_buffer, pipe)
+            res['voice_transcription'] = row.get('voice_transcription', '')
             results.append(res)
         except Exception as e:
-            # NOISY PRINT FIX: Suppress per-frame error printing. 
+            # NOISY PRINT FIX: Suppress per-frame error printing.
             # We fail silently and insert a default row to keep the pipeline moving.
             results.append({
-                'frame_id': row['frame_id'], 
-                'timestamp': row['timestamp'], 
-                'is_cat_voice': 0, 'is_human_voice': 0, 
-                'meow_loudness': 'none', 'dominant_frequency': 0.0
+                'frame_id': row['frame_id'],
+                'timestamp': row['timestamp'],
+                'is_cat_voice': 0, 'is_human_voice': 0,
+                'meow_loudness': 'none', 'dominant_frequency': 0.0,
+                'voice_transcription': row.get('voice_transcription', '')
             })
         
         if i % 500 == 0: gc.collect()
 
     #print(f"   Audio Transform: Complete.          ") # Clear the line
     return pd.DataFrame(results)
+
+
+# ==============================================================================
+# 1b. AUDIO TRANSCRIPTION (per 12-frame chunk)
+# ==============================================================================
+
+def trans_audio_transcribe(chunk_audio_tuples: list) -> str:
+    """
+    Transcribes a 12-frame audio chunk using Whisper tiny.
+    Input: list of (timestamp, int16_sample) tuples from the pipeline buffer.
+    Returns: stripped transcription text, or "" if silent or on failure.
+    """
+    if not chunk_audio_tuples:
+        return ""
+
+    samples_int16 = np.array([x[1] for x in chunk_audio_tuples], dtype=np.int16)
+
+    if np.max(np.abs(samples_int16)) < 50:
+        return ""
+
+    # Normalize to RMS 12000 (same as voice_command_consumer) so Whisper gets consistent input
+    rms = np.sqrt(np.mean(samples_int16.astype(np.float64) ** 2))
+    if rms > 0:
+        gain = 12000.0 / rms
+        samples_int16 = np.clip(samples_int16.astype(np.float64) * gain, -32768, 32767).astype(np.int16)
+
+    samples = samples_int16.astype(np.float32) / 32768.0
+
+    try:
+        model = get_whisper_model()
+        result = model.transcribe(samples, fp16=False)
+        text = result['text'].strip()
+        return text
+    except Exception as e:
+        print(f"[Transcribe] Error: {e}")
+        return ""
 
 
 # ==============================================================================
@@ -453,6 +506,8 @@ def compute_motor_vectors(left_pwm: float, right_pwm: float) -> Tuple[float, flo
 
 def transform_motor(df: pd.DataFrame) -> pd.DataFrame:
     """Main transformation function for the motor data (stateless)."""
+    if df.empty or 'frame_id' not in df.columns:
+        return pd.DataFrame(columns=['frame_id', 'timestamp', 'thrust_velocity', 'rotation_velocity', 'arm_angle'])
     features = df[['frame_id', 'timestamp']].copy()
 
     vectors = df.apply(
@@ -478,10 +533,10 @@ RANK_TO_TEXT = {3: 'high', 2: 'medium', 1: 'low', 0: np.nan}
 def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd.DataFrame, mot_df: pd.DataFrame, N_FRAMES: int = 12) -> pd.DataFrame:
     """Assembles the final Data Mart (MRT)."""
     
-    aud_df = aud_df.sort_values('frame_id').reset_index(drop=True)
-    imu_df = imu_df.sort_values('frame_id').reset_index(drop=True)
-    vis_df = vis_df.sort_values('frame_id').reset_index(drop=True)
-    mot_df = mot_df.sort_values('frame_id').reset_index(drop=True)
+    aud_df = aud_df.sort_values('frame_id').reset_index(drop=True) if not aud_df.empty and 'frame_id' in aud_df.columns else aud_df
+    imu_df = imu_df.sort_values('frame_id').reset_index(drop=True) if not imu_df.empty and 'frame_id' in imu_df.columns else imu_df
+    vis_df = vis_df.sort_values('frame_id').reset_index(drop=True) if not vis_df.empty and 'frame_id' in vis_df.columns else vis_df
+    mot_df = mot_df.sort_values('frame_id').reset_index(drop=True) if not mot_df.empty and 'frame_id' in mot_df.columns else mot_df
     
     mot_df = mot_df.copy()
     mot_df['timestamp'] = pd.to_datetime(mot_df['timestamp'], errors='coerce')
@@ -598,6 +653,12 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
             sum_robot_dist = np.sum(np.abs(dist_steps))
             delta_robot_pos = (local_x, local_y)
 
+        vt_series = aud['voice_transcription'].dropna() if 'voice_transcription' in aud.columns else pd.Series(dtype=str)
+        transcription = vt_series.iloc[-1] if not vt_series.empty else ""
+
+        sid_series = aud['transcription_seq_id'].dropna() if 'transcription_seq_id' in aud.columns else pd.Series(dtype=object)
+        transcription_seq_id = sid_series.iloc[-1] if not sid_series.empty else None
+
         rows.append({
             'experience_id': fid,
             'last_experience_id_array': vis['frame_id'].tolist(),
@@ -619,7 +680,9 @@ def build_mrt_experiences(aud_df: pd.DataFrame, imu_df: pd.DataFrame, vis_df: pd
             'sum_arm_movement': sum_arm_move,
             'delta_robot_position': delta_robot_pos,
             'sum_robot_position': sum_robot_dist,
-            'delta_robot_rotation': delta_robot_rot_deg
+            'delta_robot_rotation': delta_robot_rot_deg,
+            'voice_transcription': transcription,
+            'transcription_seq_id': transcription_seq_id,
         })
         
     return pd.DataFrame(rows)

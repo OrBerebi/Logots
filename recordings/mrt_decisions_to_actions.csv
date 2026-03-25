@@ -1,26 +1,3 @@
-decision_id,timestamp,source_module,source_event_id,experience_id,decision_type,parameters,trigger_values
-1,2026-02-04 10:48:31.429831,mrt_immediate_decisions,29f37609,0,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -14.716292381286621}",
-2,2026-02-04 10:48:31.429864,mrt_immediate_decisions,ae9eac52,1,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -11.137544631958008}",
-3,2026-02-04 10:48:31.429888,mrt_immediate_decisions,00de0d29,2,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -5.715588569641113}",
-4,2026-02-04 10:48:31.429907,mrt_immediate_decisions,8f170f6b,3,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -2.8802547454833984}",
-5,2026-02-04 10:48:31.429943,mrt_immediate_decisions,2edb22a2,4,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -2.191509246826172}",
-6,2026-02-04 10:48:31.429964,mrt_immediate_decisions,652b29ec,5,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -2.490612030029297}",
-1,2026-02-04 10:48:33.867590,mrt_immediate_decisions,8d7e4dc3,16,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": 0.8485908508300781}",
-2,2026-02-04 10:48:33.867616,mrt_immediate_decisions,1df66ab6,20,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.8476638793945312}",
-3,2026-02-04 10:48:33.867636,mrt_immediate_decisions,4150766d,22,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.7295894622802734}",
-1,2026-02-04 10:48:36.964102,mrt_immediate_decisions,a962dc29,27,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -8.4614896774292}",
-2,2026-02-04 10:48:36.964129,mrt_immediate_decisions,f286a9d0,30,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.6604671478271484}",
-3,2026-02-04 10:48:36.964149,mrt_immediate_decisions,dcc90741,33,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -9.133973121643066}",
-4,2026-02-04 10:48:36.964167,mrt_immediate_decisions,3d8aa58f,34,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.7513389587402344}",
-1,2026-02-04 10:48:39.702400,mrt_immediate_decisions,041a2354,36,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.791069984436035}",
-2,2026-02-04 10:48:39.702425,mrt_immediate_decisions,a3201a0f,39,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.1511764526367188}",
-3,2026-02-04 10:48:39.702445,mrt_immediate_decisions,7be0c063,42,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.792048454284668}",
-4,2026-02-04 10:48:39.702463,mrt_immediate_decisions,bff9a954,44,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.5845298767089844}",
-5,2026-02-04 10:48:39.702480,mrt_immediate_decisions,ab4c6fac,45,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.5454769134521484}",
-1,2026-02-04 10:48:42.940590,mrt_immediate_decisions,bd475aa1,51,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.0678348541259766}",
-2,2026-02-04 10:48:42.940616,mrt_immediate_decisions,de25d4e3,56,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -2.8646249771118164}",
-3,2026-02-04 10:48:42.940636,mrt_immediate_decisions,9755d6a3,57,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -3.193739891052246}",
-4,2026-02-04 10:48:42.940653,mrt_immediate_decisions,5c9f21b9,59,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -2.9286231994628906}",
-1,2026-02-04 10:48:45.781625,mrt_immediate_decisions,9180d8e1,61,center_gaze,"{""move_forward_cm"": 0.0, ""rotate_deg"": -13.396064758300781}",
-1770198531,2026-02-04 10:48:51.247633,mrt_communicate_user,v_1770198531,0,get_closer,"{""move_forward_cm"": 30.0, ""rotate_deg"": 0.0}","{""voice_command"": ""get closer.""}"
-1770198540,2026-02-04 10:49:00.389284,mrt_communicate_user,v_1770198540,0,play_arm,"{""arm_path"": [45, 135, 45, 135, 45, 135, 45, 135, 90], ""speed"": 1.0, ""move_forward_cm"": 0.0, ""rotate_deg"": 0.0}","{""voice_command"": ""play arm""}"
+decision_id,timestamp,source_module,source_event_id,experience_id,decision_type,parameters
+1,2026-03-03 20:35:58.821751,mrt_immediate_decisions,fb02b987,22,back_off,"{""move_forward_cm"": -15.0, ""rotate_deg"": 0.0}"
+1,2026-03-03 20:36:11.096303,mrt_immediate_decisions,830a35c7,65,play_arm,"{""arm_path"": [45, 135, 45, 135, 45, 135, 45, 135, 90], ""speed"": 1.0, ""move_forward_cm"": 0.0, ""rotate_deg"": 0.0}"
