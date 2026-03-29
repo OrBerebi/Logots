@@ -12,6 +12,7 @@ import threading
 import os
 import requests
 import queue # Import queue for the Brain Buffer
+from pydub import AudioSegment # to play audio
 
 # --- Custom Modules ---
 from . import transformation_mart_pipeline as t_mart
@@ -38,24 +39,24 @@ ACTION_CSV_FILE = 'recordings/mrt_decisions_to_actions.csv'
 GEN_MOTOR_CSV_FILE = 'recordings/mrt_generated_motor.csv'
 
 # ---Darab's Network Configuration ---
-# AUDIO_ESP32_IP = '192.168.68.100'
-# AUDIO_ESP32_PORT = 12345
-# IMU_ESP32_IP = '192.168.68.123'
-# IMU_ESP32_PORT = 12345
-# MOTORS_ESP32_IP = '192.168.68.101'
-# MOTORS_ESP32_PORT = 12345
-# VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116x" 
-# VIDEO_ESP32_CAM_URL = "http://192.168.68.116/capture"
+AUDIO_ESP32_IP = '192.168.68.100'
+AUDIO_ESP32_PORT = 12345
+IMU_ESP32_IP = '192.168.68.123'
+IMU_ESP32_PORT = 12345
+MOTORS_ESP32_IP = '192.168.68.101'
+MOTORS_ESP32_PORT = 12345
+VIDEO_ESP32_CAM_IP_SET_RES = "http://192.168.68.116" 
+VIDEO_ESP32_CAM_URL = "http://192.168.68.116/capture"
 
 # ---Asaph's Network Configuration ---
-AUDIO_ESP32_IP = '192.168.178.117'
-AUDIO_ESP32_PORT = 12345
-IMU_ESP32_IP = '192.168.178.111'
-IMU_ESP32_PORT = 12345
-MOTORS_ESP32_IP = '192.168.178.118'
-MOTORS_ESP32_PORT = 12345
-VIDEO_ESP32_CAM_IP_SET_RES = "192.168.178.100" 
-VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture"
+#AUDIO_ESP32_IP = '192.168.178.117'
+#AUDIO_ESP32_PORT = 12345
+#IMU_ESP32_IP = '192.168.178.111'
+#IMU_ESP32_PORT = 12345
+#MOTORS_ESP32_IP = '192.168.178.118'
+#MOTORS_ESP32_PORT = 12345
+#VIDEO_ESP32_CAM_IP_SET_RES = "192.168.178.100" 
+#VIDEO_ESP32_CAM_URL = "http://192.168.178.100/capture"
 
 # --- GLOBAL CONTROL STATE ---
 # Manual Control (From GUI)
@@ -65,6 +66,7 @@ command_lock = threading.Lock()
 # Auto Control (From Brain)
 # We use a Queue to store the sequence of future actions
 BRAIN_COMMAND_QUEUE = queue.Queue()
+AUDIO_PLAYBACK_QUEUE = queue.Queue()
 
 def send_motor(left_pwm, right_pwm, arm_angle=90):
     """Called by GUI to set manual command."""
@@ -186,6 +188,59 @@ class ThreadSafeBuffer:
                 return {'visual': chunk_vis, 'motor': chunk_mot, 'imu': chunk_imu, 'audio': chunk_aud_tuples}
             return None
 
+
+
+def audio_playback_consumer(stop_event):
+    """
+    Dedicated daemon thread: Monitors the AUDIO_PLAYBACK_QUEUE.
+    When a filename is received, it processes the audio and streams it to the 
+    Motor ESP32 via TCP without blocking the rest of the pipeline.
+    """
+    print("[Playback] Audio playback thread started.")
+    
+    # We use the Motor ESP32 IP because that is where the amp is physically wired
+    TARGET_IP = MOTORS_ESP32_IP
+    TARGET_PORT = 12346 
+    
+    while not stop_event.is_set():
+        try:
+            # Check the queue for a new file. 
+            # Timeout allows the loop to check the stop_event frequently.
+            filename = AUDIO_PLAYBACK_QUEUE.get(timeout=0.5)
+            
+            print(f"   🔊 [Playback] Loading and preprocessing '{filename}'...")
+            
+            try:
+                audio = AudioSegment.from_file(filename)
+                # Force format to match ESP32 I2S config
+                audio = audio.set_frame_rate(44100).set_sample_width(2).set_channels(2)
+                pcm_data = audio.raw_data
+            except Exception as e:
+                print(f"   🛑 [Playback] Error reading audio file {filename}: {e}")
+                continue # Skip to the next item in the queue
+                
+            print(f"   🔊 [Playback] Streaming to {TARGET_IP}:{TARGET_PORT}...")
+            
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(2.0) # Prevent hanging if ESP32 is offline
+                s.connect((TARGET_IP, TARGET_PORT))
+                s.settimeout(None) # Allow TCP to throttle naturally during playback
+                
+                chunk_size = 1024 
+                for i in range(0, len(pcm_data), chunk_size):
+                    chunk = pcm_data[i:i + chunk_size]
+                    s.sendall(chunk)
+                    
+                print("   🔊 [Playback] Data sent. Holding connection open to prevent cutoff...")
+                time.sleep(1) # The cutoff fix we discovered earlier
+                print("   🔊 [Playback] Audio playback complete.")
+                
+        except queue.Empty:
+            # Nothing in the queue, just continue waiting
+            continue
+        except Exception as e:
+            print(f"   🛑 [Playback] Network/Streaming error: {e}")
+            time.sleep(1) # Prevent rapid looping if network goes down
 # ==============================================================================
 # COLLECTION THREADS (PRODUCERS)
 # ==============================================================================
@@ -486,24 +541,42 @@ def process_chunk(chunk_data, buffer, chunk_index):
                 if not actions.empty:
                     buffer.master_actions = pd.concat([buffer.master_actions, actions], ignore_index=True)
                     
-                    motor_gen = e_engine.build_mrt_motor(actions, start_frame_id=chunk_index*100)
+                    # ==========================================================
+                    # --- THE NEW EXECUTION ROUTER ---
+                    # ==========================================================
+                    
+                    # 1. Split actions based on decision_type prefix
+                    is_audio = actions['decision_type'].str.startswith('play_audio')
+                    audio_actions = actions[is_audio]
+                    motor_actions = actions[~is_audio]
+
+                    # 2. Route Audio Commands to the new queue
+                    for _, row in audio_actions.iterrows():
+                        try:
+                            # Extract the JSON parameters we defined in decision_engine
+                            params = json.loads(row['parameters'])
+                            filename = params.get('filename')
+                            if filename:
+                                AUDIO_PLAYBACK_QUEUE.put(filename)
+                                print(f"   🔊 [Router] Audio command sent to queue: {filename}")
+                        except Exception as e:
+                            print(f"   🛑 [Router] Error parsing audio params: {e}")
+
+                    # 3. Route Motor Commands to the Execution Engine
+                    motor_gen = e_engine.build_mrt_motor(motor_actions, start_frame_id=chunk_index*100)
                     if not motor_gen.empty:
                         buffer.master_gen_motor = pd.concat([buffer.master_gen_motor, motor_gen], ignore_index=True)
-                        print(f"   ⚡ [Pipeline] ACTION TRIGGERED: {len(motor_gen)} frames generated.")
+                        print(f"   ⚡ [Pipeline] MOTOR ACTION TRIGGERED: {len(motor_gen)} frames generated.")
                         
-                        # --- FEEDING THE CORTEX (The Closed Loop) ---
-                        # Challenge: motor_gen assumes DT=0.1s (10Hz)
-                        # Our Robot Loop runs at 1/FPS (4Hz = 0.25s)
-                        # Strategy: Downsample 10Hz -> 4Hz to play back at correct speed
-                        
-                        execution_ratio = int((1.0/FPS) / 0.1) # e.g., 0.25 / 0.1 = 2.5 -> 2
+                        # Downsample 10Hz -> 4Hz to play back at correct speed
+                        execution_ratio = int((1.0/FPS) / 0.1) 
                         if execution_ratio < 1: execution_ratio = 1
                         
-                        # We take every Nth frame to approximate the speed
                         for i in range(0, len(motor_gen), execution_ratio):
                             row = motor_gen.iloc[i]
                             cmd = (int(row['left_pwm']), int(row['right_pwm']), int(row['arm_angle']))
                             BRAIN_COMMAND_QUEUE.put(cmd)
+                    # ==========================================================
 
         buffer.ctx_trans_vis = trans_vis.tail(MART_WINDOW_SIZE)
         buffer.ctx_trans_aud = trans_aud.tail(MART_WINDOW_SIZE)
@@ -564,8 +637,11 @@ def run_data_collection(duration_unused, stop_event):
     t_pipe = threading.Thread(target=pipeline_consumer, args=(stop_event, stream_buffer), daemon=True)
     t_transcribe = threading.Thread(target=audio_transcription_producer, args=(stop_event, stream_buffer), daemon=True)
     t_reflect = threading.Thread(target=mrd.reflective_decision_loop, args=(stop_event, stream_buffer), daemon=True)
+    # --- NEW: Launch the Audio Playback Thread ---
+    t_playback = threading.Thread(target=audio_playback_consumer, args=(stop_event,), daemon=True)
 
-    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_transcribe, t_reflect])
+
+    threads.extend([t_mot, t_aud, t_imu, t_vis, t_pipe, t_transcribe, t_reflect, t_playback])
     for t in threads: t.start()
     
     print("✅ System Running. Manual Override Active.")

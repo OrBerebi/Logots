@@ -11,8 +11,10 @@ from datetime import datetime
 import threading
 from typing import Dict, Any, List, Tuple
 import gc
+
 import torch
 import os
+from scipy.io.wavfile import write
 import cv2
 
 
@@ -26,6 +28,7 @@ VISUAL_IMG_SIZE = 640
 _audio_pipe = None
 _whisper_model = None
 _whisper_lock = threading.Lock()
+_debug_audio_counter = 0  # <--- NEW: Counter for our debug files
 
 def get_visual_model(device: str = 'mps'): 
     """Initializes or returns the singleton YOLO model."""
@@ -87,17 +90,52 @@ def safe_literal_eval(val):
         except (ValueError, SyntaxError):
             return val # Return raw string if parse fails
     return val
-
+"""
 def get_whisper_model():
-    """Initializes or returns the singleton Whisper tiny model (thread-safe)."""
     global _whisper_model
     with _whisper_lock:
         if _whisper_model is None:
             import whisper
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            import torch
+            import os
+            
+            # --- THE FIX ---
+            # Tell PyTorch to route unsupported GPU operations to the CPU
+            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
+            device = "mps" if torch.backends.mps.is_available() else "cpu"   # temp O.B.
+
+            #device = "cpu"
             print(f"Loading Whisper tiny model on {device}...")
             _whisper_model = whisper.load_model("tiny", device=device)
             print("✅ Whisper model loaded.")
+    return _whisper_model
+"""
+
+class MLXWhisperWrapper:
+    """A drop-in wrapper so the rest of your code doesn't know PyTorch is gone."""
+    def transcribe(self, audio_array, **kwargs):
+        import mlx_whisper
+        # MLX downloads the hyper-optimized Apple Silicon weights from HuggingFace
+        return mlx_whisper.transcribe(
+            audio_array, 
+            path_or_hf_repo="mlx-community/whisper-tiny"
+        )
+
+def get_whisper_model():
+    """Initializes the MLX wrapper."""
+    global _whisper_model
+    with _whisper_lock:
+        if _whisper_model is None:
+            print("🚀 Loading Apple MLX Whisper (tiny) for blazing fast inference...")
+            # We don't need to load PyTorch or set environment variables anymore!
+            _whisper_model = MLXWhisperWrapper()
+            
+            # Run a tiny dummy audio array through it once to "warm up" the GPU cache
+            import numpy as np
+            _whisper_model.transcribe(np.zeros(16000, dtype=np.float32))
+            print("✅ MLX Whisper initialized and warmed up!")
+            
     return _whisper_model
 
 
@@ -289,28 +327,54 @@ def trans_audio_transcribe(chunk_audio_tuples: list) -> str:
     """
     Transcribes a 12-frame audio chunk using Whisper tiny.
     Input: list of (timestamp, int16_sample) tuples from the pipeline buffer.
-    Returns: stripped transcription text, or "" if silent or on failure.
     """
+    global _debug_audio_counter # Bring in our counter
+
     if not chunk_audio_tuples:
         return ""
 
     samples_int16 = np.array([x[1] for x in chunk_audio_tuples], dtype=np.int16)
 
+    # Skip dead silence to save GPU cycles
     if np.max(np.abs(samples_int16)) < 50:
         return ""
 
-    # Normalize to RMS 12000 (same as voice_command_consumer) so Whisper gets consistent input
-    rms = np.sqrt(np.mean(samples_int16.astype(np.float64) ** 2))
-    if rms > 0:
-        gain = 12000.0 / rms
-        samples_int16 = np.clip(samples_int16.astype(np.float64) * gain, -32768, 32767).astype(np.int16)
+    # --- The RMS Normalization (Target = 2000) ---
+    samples_float = samples_int16.astype(np.float64)
+    current_rms = np.sqrt(np.mean(samples_float ** 2))
+    
+    target_rms = 2000.0
+    
+    if current_rms > 0:
+        gain = target_rms / current_rms
+        # Apply the gain and clip to prevent audio peaking/distortion
+        samples_float = np.clip(samples_float * gain, -32768.0, 32767.0)
 
-    samples = samples_int16.astype(np.float32) / 32768.0
+    # Convert the normalized audio to the float32 format (-1.0 to 1.0) MLX expects
+    samples = samples_float.astype(np.float32) / 32768.0
 
     try:
         model = get_whisper_model()
         result = model.transcribe(samples, fp16=False)
         text = result['text'].strip()
+
+        """
+        # --- THE UPGRADED DEBUG DUMP ---
+        # Save up to 100 consecutive clips and their text guesses
+        if _debug_audio_counter < 100:
+            os.makedirs('recordings/whisper_debug', exist_ok=True)
+            base_filename = f'recordings/whisper_debug/chunk_{_debug_audio_counter:04d}'
+            
+            # Save the Audio
+            write(f'{base_filename}.wav', 16000, samples_int16)
+            
+            # Save what Whisper thought it heard
+            with open(f'{base_filename}.txt', 'w') as f:
+                f.write(text if text else "[NO SPEECH DETECTED]")
+                
+            _debug_audio_counter += 1
+        # -------------------------------
+        """
         return text
     except Exception as e:
         print(f"[Transcribe] Error: {e}")
