@@ -65,6 +65,8 @@ def rule_voice_command(row):
         decision = 'get_closer'
     elif 'play' in text and 'arm' in text:
         decision = 'play_arm'
+    elif 'speak' in text:                   # <--- NEW: Catch the bark command
+        decision = 'play_audio_bark'       # <--- NEW: Set the proposed decision
     else:
         return None
     return {
@@ -182,6 +184,16 @@ def def_get_closer(trigger_experience):
         }
     }
 
+def def_play_audio_bark(trigger_experience):
+    """Goal: Play a pre-saved barking sound to deter or interact."""
+    return {
+        "action": "play_audio", # Identifies this as a network audio stream, not a motor command
+        "description": "Audio: Playing dog bark",
+        "parameters": {
+            "filename": "dog-barking.wav" # The exact file we want to stream
+        }
+    }
+
 def def_back_off(trigger_experience):
     """Goal: Retreat (Safety)."""
     return {
@@ -242,7 +254,8 @@ DECISION_DEFINITIONS = {
     'send_user_text': def_placeholder,
     'send_user_picture': def_placeholder,
     'play_arm': def_play_arm,
-    'center_gaze': def_center_gaze
+    'center_gaze': def_center_gaze,
+    'play_audio_bark': def_play_audio_bark  # <--- NEW: Link decision to action
 }
 
 def get_action_parameters(decision_type, experience_row):
