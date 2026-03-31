@@ -1,15 +1,3 @@
 immed_id,timestamp,experience_id,rule_name,trigger_values,proposed_decision
-ab949673,2026-03-29 11:25:12.017533,260,CAT_GAZE,"{""cat_x"": 637.2857666015625}",center_gaze
-1b5cef87,2026-03-29 11:25:12.017591,261,CAT_GAZE,"{""cat_x"": 635.058349609375}",center_gaze
-f704056b,2026-03-29 11:25:14.961743,271,CAT_GAZE,"{""cat_x"": 576.9314575195312}",center_gaze
-d2dd7ee9,2026-03-29 11:25:14.961957,274,CAT_GAZE,"{""cat_x"": 580.532470703125}",center_gaze
-ab964700,2026-03-29 11:25:14.962014,275,CAT_GAZE,"{""cat_x"": 581.845947265625}",center_gaze
-1252253d,2026-03-29 11:25:25.599258,306,CAT_GAZE,"{""cat_x"": 562.5849609375}",center_gaze
-c94b9063,2026-03-29 11:25:25.599350,308,CAT_GAZE,"{""cat_x"": 558.7860107421875}",center_gaze
-1d90296e,2026-03-29 11:25:25.599394,309,CAT_GAZE,"{""cat_x"": 557.94384765625}",center_gaze
-24749050,2026-03-29 11:25:25.599436,310,CAT_GAZE,"{""cat_x"": 558.3677978515625}",center_gaze
-c5812f31,2026-03-29 11:25:25.599477,311,CAT_GAZE,"{""cat_x"": 560.30908203125}",center_gaze
-9e17e9c1,2026-03-29 11:25:28.157882,313,CAT_GAZE,"{""cat_x"": 558.8312377929688}",center_gaze
-212b77c0,2026-03-29 11:25:28.157942,314,CAT_GAZE,"{""cat_x"": 560.76708984375}",center_gaze
-62dc1466,2026-03-29 11:25:28.158169,322,VOICE_COMMAND,"{""voice_transcription"": ""overt's speak...""}",play_audio_bark
-7b37869a,2026-03-29 11:25:31.245145,324,CAT_GAZE,"{""cat_x"": 380.76300048828125}",center_gaze
+df8d82b8,2026-03-31 23:17:59.550902,43,VOICE_COMMAND,"{""voice_transcription"": ""hey robert, speak.""}",play_audio_bark
+f7e29ff1,2026-03-31 23:18:15.447361,97,VOICE_COMMAND,"{""voice_transcription"": ""it's right again. hey robot speak.""}",play_audio_bark

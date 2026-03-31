@@ -16,6 +16,7 @@ import torch
 import os
 from scipy.io.wavfile import write
 import cv2
+from scipy.signal import butter, lfilter
 
 
 # --- GLOBAL MODEL STATE & CONFIGURATION ---
@@ -322,60 +323,117 @@ def transform_audio(df: pd.DataFrame) -> pd.DataFrame:
 # ==============================================================================
 # 1b. AUDIO TRANSCRIPTION (per 12-frame chunk)
 # ==============================================================================
+_debug_dump_counter = 0
+def apply_bandpass_filter(data, fs=16000, lowcut=300.0, highcut=3400.0, order=5):
+    """
+    Surgically removes low-end electrical rumble and high-end digital hiss.
+    Leaves only the frequencies where the human voice lives.
+    """
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return lfilter(b, a, data)
 
 def trans_audio_transcribe(chunk_audio_tuples: list) -> str:
-    """
-    Transcribes a 12-frame audio chunk using Whisper tiny.
-    Input: list of (timestamp, int16_sample) tuples from the pipeline buffer.
-    """
-    global _debug_audio_counter # Bring in our counter
-
+    global _debug_dump_counter
+    
     if not chunk_audio_tuples:
         return ""
 
     samples_int16 = np.array([x[1] for x in chunk_audio_tuples], dtype=np.int16)
+    samples_float = samples_int16.astype(np.float64)
 
-    # Skip dead silence to save GPU cycles
-    if np.max(np.abs(samples_int16)) < 50:
+    # 1. Remove DC Offset
+    samples_float -= np.mean(samples_float)
+
+    # 2. Apply the Bandpass "Telephone" Filter
+    # This strips away the ESP32 Wi-Fi clicking and I2S static!
+    samples_float = apply_bandpass_filter(samples_float)
+
+    # 3. Calculate Raw RMS (Now that the static is gone, this is much more accurate)
+    current_rms = np.sqrt(np.mean(samples_float ** 2))
+    if current_rms < 1.0: 
         return ""
 
-    # --- The RMS Normalization (Target = 2000) ---
-    samples_float = samples_int16.astype(np.float64)
-    current_rms = np.sqrt(np.mean(samples_float ** 2))
-    
+    # 4. Capped Normalization
     target_rms = 2000.0
-    
-    if current_rms > 0:
-        gain = target_rms / current_rms
-        # Apply the gain and clip to prevent audio peaking/distortion
-        samples_float = np.clip(samples_float * gain, -32768.0, 32767.0)
+    gain = target_rms / current_rms
+    # We can safely raise the gain cap back up because the static is gone
+    gain = min(gain, 20.0) 
+    samples_float = np.clip(samples_float * gain, -32768.0, 32767.0)
 
-    # Convert the normalized audio to the float32 format (-1.0 to 1.0) MLX expects
+    # 5. Sub-Window VAD
+    sr = 16000
+    slice_size = int(sr * 0.1) 
+    is_speaking = False
+    
+    for i in range(0, len(samples_float), slice_size):
+        slice_rms = np.sqrt(np.mean(samples_float[i:i+slice_size]**2))
+        # With the rumble gone, true silence is very quiet.
+        # We can safely lower the trigger to catch quiet speech.
+        if slice_rms > 350.0:  
+            is_speaking = True
+            break
+            
+    if not is_speaking:
+        return "" 
+
+    """
+    # --- DEBUG AUDIO DUMP ---
+    if _debug_dump_counter < 50:
+        os.makedirs('recordings/debug_filtered_chunks', exist_ok=True)
+        file_path = f'recordings/debug_filtered_chunks/chunk_{_debug_dump_counter:03d}.wav'
+        
+        # Save the FILTERED audio so you can hear the difference
+        filtered_int16 = np.clip(samples_float, -32768.0, 32767.0).astype(np.int16)
+        write(file_path, 16000, filtered_int16)
+        
+        _debug_dump_counter += 1
+    # -------------------------
+    """
+    # 6. Format for MLX Whisper and Transcribe
     samples = samples_float.astype(np.float32) / 32768.0
 
     try:
         model = get_whisper_model()
-        result = model.transcribe(samples, fp16=False)
-        text = result['text'].strip()
-
-        """
-        # --- THE UPGRADED DEBUG DUMP ---
-        # Save up to 100 consecutive clips and their text guesses
-        if _debug_audio_counter < 100:
-            os.makedirs('recordings/whisper_debug', exist_ok=True)
-            base_filename = f'recordings/whisper_debug/chunk_{_debug_audio_counter:04d}'
+        result = model.transcribe(
+            samples, 
+            fp16=False,
+            condition_on_previous_text=False,
+            compression_ratio_threshold=2.4 # Strict anti-looping metric
+        )
+        
+        # --- THE CONFIDENCE FILTER ---
+        valid_text = []
+        
+        for segment in result.get('segments', []):
+            logprob = segment.get('avg_logprob', -1.0)
+            no_speech = segment.get('no_speech_prob', 0.0)
+            text = segment.get('text', '').strip()
             
-            # Save the Audio
-            write(f'{base_filename}.wav', 16000, samples_int16)
+            # Skip empty segments
+            if not text:
+                continue
             
-            # Save what Whisper thought it heard
-            with open(f'{base_filename}.txt', 'w') as f:
-                f.write(text if text else "[NO SPEECH DETECTED]")
+            # FILTER 1: The Hallucination Killer (Word Confidence)
+            # Default is -1.0. By making it -0.8, we demand higher certainty.
+            if logprob < -0.8:
+                # Uncomment to see what it is throwing away!
+                # print(f"  [Filter] Dropped low-confidence guess (LogProb {logprob:.2f}): '{text}'")
+                continue
                 
-            _debug_audio_counter += 1
-        # -------------------------------
-        """
-        return text
+            # FILTER 2: The Static Killer (Noise Confidence)
+            # If it is more than 60% sure it's just room noise, throw it away.
+            if no_speech > 0.6:
+                # print(f"  [Filter] Dropped background noise (NoSpeech {no_speech:.2f}): '{text}'")
+                continue
+                
+            # If it survives both filters, it is almost certainly a clean, real command!
+            valid_text.append(text)
+            
+        return " ".join(valid_text).strip()
+        
     except Exception as e:
         print(f"[Transcribe] Error: {e}")
         return ""
