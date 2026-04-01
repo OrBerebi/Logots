@@ -1,3 +1,26 @@
 immed_id,timestamp,experience_id,rule_name,trigger_values,proposed_decision
-df8d82b8,2026-03-31 23:17:59.550902,43,VOICE_COMMAND,"{""voice_transcription"": ""hey robert, speak.""}",play_audio_bark
-f7e29ff1,2026-03-31 23:18:15.447361,97,VOICE_COMMAND,"{""voice_transcription"": ""it's right again. hey robot speak.""}",play_audio_bark
+1a60fcc9,2026-04-01 09:29:59.430841,14,CAT_GAZE,"{""cat_x"": 636.1776733398438}",center_gaze
+fee0c83d,2026-04-01 09:29:59.430902,15,CAT_GAZE,"{""cat_x"": 636.8258056640625}",center_gaze
+bb53ff49,2026-04-01 09:29:59.430959,16,CAT_GAZE,"{""cat_x"": 638.0685424804688}",center_gaze
+280842e1,2026-04-01 09:29:59.431001,17,CAT_GAZE,"{""cat_x"": 636.531494140625}",center_gaze
+c3c0a38a,2026-04-01 09:29:59.431045,18,CAT_GAZE,"{""cat_x"": 579.9722900390625}",center_gaze
+056699e0,2026-04-01 09:29:59.431110,19,CAT_GAZE,"{""cat_x"": 535.4044189453125}",center_gaze
+fae73b5a,2026-04-01 09:29:59.431174,20,CAT_GAZE,"{""cat_x"": 501.11602783203125}",center_gaze
+d73bf50c,2026-04-01 09:29:59.431263,22,CAT_GAZE,"{""cat_x"": 395.015869140625}",center_gaze
+7fc7c519,2026-04-01 09:30:02.525269,29,VOICE_COMMAND,"{""voice_transcription"": ""back off.""}",back_off
+b2298e05,2026-04-01 09:30:14.611414,73,CAT_GAZE,"{""cat_x"": 468.00360107421875}",center_gaze
+19f379b4,2026-04-01 09:30:14.611539,77,CAT_GAZE,"{""cat_x"": 381.30450439453125}",center_gaze
+973e1614,2026-04-01 09:30:14.611576,78,CAT_GAZE,"{""cat_x"": 375.39825439453125}",center_gaze
+c50782b7,2026-04-01 09:30:14.611632,80,CAT_GAZE,"{""cat_x"": 356.3758239746094}",center_gaze
+7e60b80c,2026-04-01 09:30:14.611666,81,CAT_GAZE,"{""cat_x"": 344.4974060058594}",center_gaze
+87fa5400,2026-04-01 09:30:14.611700,82,CAT_GAZE,"{""cat_x"": 320.50152587890625}",center_gaze
+d365d1f0,2026-04-01 09:30:14.611733,83,CAT_GAZE,"{""cat_x"": 328.8978271484375}",center_gaze
+09ea9086,2026-04-01 09:30:17.766402,84,CAT_GAZE,"{""cat_x"": 330.007568359375}",center_gaze
+8619ff54,2026-04-01 09:30:17.766456,85,CAT_GAZE,"{""cat_x"": 335.0924377441406}",center_gaze
+e3381c6f,2026-04-01 09:30:17.766497,86,CAT_GAZE,"{""cat_x"": 337.3642578125}",center_gaze
+48457725,2026-04-01 09:30:17.766537,87,CAT_GAZE,"{""cat_x"": 274.0334777832031}",center_gaze
+788f0803,2026-04-01 09:30:17.766580,88,CAT_GAZE,"{""cat_x"": 274.843505859375}",center_gaze
+3255681a,2026-04-01 09:30:20.827384,103,CAT_GAZE,"{""cat_x"": 412.453857421875}",center_gaze
+e96f21d2,2026-04-01 09:30:20.827528,105,VOICE_COMMAND,"{""voice_transcription"": ""hey, speak robot""}",play_audio_bark
+024d74d0,2026-04-01 09:30:23.757357,109,CAT_GAZE,"{""cat_x"": 411.9474792480469}",center_gaze
+4fc1cee5,2026-04-01 09:30:23.757443,111,CAT_GAZE,"{""cat_x"": 411.5771789550781}",center_gaze
