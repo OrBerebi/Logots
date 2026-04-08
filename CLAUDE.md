@@ -13,11 +13,12 @@ python run.py   # Launches the Tkinter GUI (gui_controller.py)
 ### Data Flow
 ```
 Hardware Sensors
-    → recording_module.py        (collect raw data)
+    → recording_module.py              (collect raw data)
     → transformation_mart_pipeline.py  (transform to features)
-    → decision_engine.py         (fire rules → decisions)
-    → execution_engine.py        (decisions → motor commands)
-    → recordings/*.csv           (persisted output)
+    → decision_engine.py               (fire rules → decisions, every ~3s)
+    → execution_engine.py              (decisions → motor commands)
+    → mrt_reflective_decisions.py      (LLM strategic layer, every ~20s)
+    → recordings/*.csv                 (persisted output)
 ```
 
 ### Core Modules (`src/logots/core/`)
@@ -29,10 +30,16 @@ Hardware Sensors
   - `transform_motor()` — Computes thrust/rotation velocity vectors
   - `build_mrt_experiences()` — Joins all modalities into a unified experience DataFrame (N=12 frame window)
 - **`decision_engine.py`** — Rule-based system:
-  - Rules: `rule_safety_stop` (priority 99), `rule_cat_greeting` (10), `rule_cat_gaze` (5)
+  - Rules: `rule_safety_stop` (priority 99), `rule_voice_command` (50), `rule_cat_greeting` (10), `rule_cat_gaze` (5)
   - Actions: `get_closer`, `back_off`, `center_gaze`, `play_arm`
   - Visual servoing constants: `FRAME_WIDTH=640`, `FOV_H_DEG=60`
 - **`execution_engine.py`** — Converts action parameters into timestamped PWM motor commands (10Hz, `PWM_CRUISE=150`)
+- **`mrt_reflective_decisions.py`** — LLM strategic layer (Claude Haiku, every ~20s):
+  - Reads 80 rows of `master_mrt` + last 10 reactive decisions
+  - Compresses into text summary, calls Anthropic API, injects motor commands via `BRAIN_COMMAND_QUEUE`
+  - Interprets natural-language voice commands the keyword matcher misses
+  - Logs all reasoning to `recordings/mrt_reflective_log.jsonl`
+  - Graceful degradation: runs on rules only if API key or SDK is missing
 - **`voice_command_module.py`** — Whisper STT (`tiny` model on MPS) for voice commands: "back off", "get closer", "play arm"
 
 ### GUI (`src/logots/gui/`)
@@ -60,6 +67,7 @@ CSV outputs from pipeline runs — not source code, safe to discard/regenerate:
 - `mrt_immediate_decisions.csv` — Rule-fired decisions
 - `mrt_decisions_to_actions.csv` — Decisions mapped to motor parameters
 - `mrt_generated_motor.csv` — Final PWM command sequence
+- `mrt_reflective_log.jsonl` — LLM reasoning trace (every 20s cycle, including no_action and failures)
 
 ## Key Constants
 | Constant | Value | Location |
@@ -81,4 +89,6 @@ Runs on macOS with Apple Silicon. MPS is the preferred device for YOLO and AST m
 - `transformers` (AST audio classification)
 - `whisper` (voice commands)
 - `torch` (MPS backend)
+- `anthropic` (Claude Haiku API for reflective decisions)
+- `python-dotenv` (loads `.env` for API key)
 - `pandas`, `numpy`, `opencv-python`, `Pillow`

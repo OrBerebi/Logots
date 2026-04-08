@@ -113,21 +113,7 @@ def visualize_mrt_delta_position(
                         ymin = float(det['ymin'])
                         xmax = float(det['xmax'])
                         ymax = float(det['ymax'])
-                        #draw.rectangle([xmin, ymin, xmax, ymax], outline="cyan", width=2)
-
-                        # --- BULLETPROOF BOUNDING BOX ---
-                        # Force coordinates into the correct Min/Max order so PIL never crashes
-                        safe_xmin = min(xmin, xmax)
-                        safe_xmax = max(xmin, xmax)
-                        safe_ymin = min(ymin, ymax)
-                        safe_ymax = max(ymin, ymax)
-                        
-                        # Prevent 0-pixel width/height boxes (which also crash PIL)
-                        if safe_xmax == safe_xmin: safe_xmax += 1
-                        if safe_ymax == safe_ymin: safe_ymax += 1
-                        
-                        # Draw with the safe coordinates
-                        draw.rectangle([safe_xmin, safe_ymin, safe_xmax, safe_ymax], outline="cyan", width=2)
+                        draw.rectangle([xmin, ymin, xmax, ymax], outline="cyan", width=2)
 
                         break 
         

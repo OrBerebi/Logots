@@ -2,11 +2,11 @@
 #include <Wire.h>
 #include <driver/i2s.h>
 
-const char *ssid = "Mushkins";
-const char *password = "besserbros";
+//const char *ssid = "Mushkins";
+//const char *password = "besserbros";
 
-//const char* ssid = "self.object";
-//const char* password = "FRTZ35%%grmnySF";
+const char* ssid = "self.object";
+const char* password = "FRTZ35%%grmnySF";
 
 // --- Motor Server (Original) ---
 WiFiServer motorServer(12345);

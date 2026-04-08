@@ -28,6 +28,8 @@ DEFAULT_INTERVAL = 20
 QUEUE_BUSY_THRESHOLD = 10
 DEFAULT_TIMEOUT = 8.0
 FPS = 4  # Must match recording_module.FPS
+# Experience window: one row per visual frame at 4fps × 20s = 80 rows
+EXPERIENCE_WINDOW = DEFAULT_INTERVAL * FPS  # 80 rows ≈ 20s of data
 
 SYSTEM_PROMPT = """\
 You are the strategic brain of a cat-sitter robot named Logots. Every 20 seconds \
@@ -54,9 +56,9 @@ Respond ONLY with a JSON object:
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-def format_experience_context(mrt_df, n_rows=40):
+def format_experience_context(mrt_df):
     """Compress recent experience rows into ~4 summary blocks for the LLM."""
-    df = mrt_df.tail(n_rows).copy()
+    df = mrt_df.copy()
     if df.empty:
         return "No experience data available."
 
@@ -186,12 +188,15 @@ def call_llm(prompt_bundle, model=DEFAULT_MODEL, timeout=DEFAULT_TIMEOUT):
 
     try:
         client = anthropic.Anthropic(api_key=api_key, timeout=timeout)
+        t0 = time.time()
         response = client.messages.create(
             model=model,
             max_tokens=200,
             system=prompt_bundle["system"],
             messages=prompt_bundle["messages"],
         )
+        elapsed_ms = (time.time() - t0) * 1000
+        print(f"[Reflective] API call: {elapsed_ms:.0f}ms")
         text = response.content[0].text.strip()
 
         # Strip markdown fences if the model wrapped the JSON
@@ -331,26 +336,22 @@ def reflective_decision_loop(stop_event, buffer, interval=DEFAULT_INTERVAL):
             continue
 
         # --- Snapshot buffer state ---
-        # Use a wider window for voice (last 250 rows ≈ 60s at 4fps)
-        # but keep the experience summary at 40 rows for token efficiency
+        # Take the full interval window so the LLM sees everything since its last cycle
         with buffer.lock:
-            mrt_wide = buffer.master_mrt.tail(250).copy() if not buffer.master_mrt.empty else pd.DataFrame()
+            mrt_snapshot = buffer.master_mrt.tail(EXPERIENCE_WINDOW).copy() if not buffer.master_mrt.empty else pd.DataFrame()
             dec_snapshot = buffer.master_decisions.tail(10).copy() if not buffer.master_decisions.empty else pd.DataFrame()
 
-        if mrt_wide.empty:
+        if mrt_snapshot.empty:
             continue
 
-        mrt_snapshot = mrt_wide.tail(40)
-
-        # --- Extract latest unique voice transcription from the wide window ---
+        # --- Extract best voice transcription (longest = most complete from sliding window) ---
         voice_text = None
-        if 'voice_transcription' in mrt_wide.columns:
-            vt = mrt_wide[['voice_transcription']].copy()
+        if 'voice_transcription' in mrt_snapshot.columns:
+            vt = mrt_snapshot[['voice_transcription']].copy()
             vt['text_str'] = vt['voice_transcription'].astype(str).str.strip()
             vt = vt[vt['text_str'].str.len() > 0]
             if not vt.empty:
-                unique_texts = vt['text_str'].drop_duplicates()
-                voice_text = str(unique_texts.iloc[-1])
+                voice_text = str(vt.loc[vt['text_str'].str.len().idxmax(), 'text_str'])
 
         # --- Build prompt and call LLM ---
         experience_ctx = format_experience_context(mrt_snapshot)
