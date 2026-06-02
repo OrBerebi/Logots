@@ -38,6 +38,24 @@ DECISION_CSV_FILE = 'recordings/mrt_immediate_decisions.csv'
 ACTION_CSV_FILE = 'recordings/mrt_decisions_to_actions.csv'
 GEN_MOTOR_CSV_FILE = 'recordings/mrt_generated_motor.csv'
 
+# --- CSV headers (used to pre-create empty audit files when streaming) ---
+DECISION_HEADERS = ['immed_id', 'timestamp', 'experience_id', 'rule_name', 'trigger_values', 'proposed_decision']
+ACTION_HEADERS = ['decision_id', 'timestamp', 'source_module', 'source_event_id', 'experience_id', 'decision_type', 'parameters']
+GEN_MOTOR_HEADERS = ['frame_id', 'timestamp', 'left_pwm', 'right_pwm', 'arm_angle', 'source', 'decision_id']
+
+# --- In-RAM rolling-window caps (production / debug-off mode) ---
+# Bound memory so the robot can run for hours. Full history still persists to
+# disk via per-chunk CSV streaming; only the in-RAM mirror is trimmed.
+# The reflective layer reads master_mrt.tail(EXPERIENCE_WINDOW=80) and
+# master_decisions.tail(10), so caps are set comfortably above those needs.
+MRT_CAP = 200
+DECISIONS_CAP = 50
+ACTIONS_CAP = 50
+GEN_MOTOR_CAP = 200
+
+# Production heartbeat: print a status line every N chunks (~1/min at 3s/chunk)
+HEARTBEAT_EVERY = 20
+
 # ---Darab's Network Configuration ---
 #AUDIO_ESP32_IP = '192.168.68.100'
 #AUDIO_ESP32_PORT = 12345
@@ -101,34 +119,33 @@ def configure_camera(ip_address: str, framesize_val: int = 6, quality_val: int =
 # ==============================================================================
 
 class ThreadSafeBuffer:
-    def __init__(self):
+    def __init__(self, debug=False):
         self.lock = threading.Lock()
+        self.csv_lock = threading.Lock()  # serializes per-chunk CSV appends
+        self.debug = debug                # full media + verbose when True
         self.motor = []
-        
+
         # Split Audio Buffers
         self.audio_pipeline = []    # For the Context/Mart layer
-        self.audio_voice = []       # For the Voice Command layer (legacy, unused)
         self.audio_transcribe = []  # For the rolling-window transcription producer
 
         # Transcription history: [(seq_id, text), ...]
         self.transcription_history = []
-        
+
         self.imu = []
         self.visual = []
-        
-        # Accumulators
-        self.acc_motor = []
-        self.acc_visual = [] 
-        self.acc_imu = []
-        self.acc_audio_raw = [] 
-        
+
+        # Accumulators (only populated in debug mode, for end-of-session media)
+        self.acc_visual = []
+        self.acc_audio_raw = []
+
         # Pipeline State
         self.last_imu_raw_row = None
         self.ctx_trans_vis = pd.DataFrame()
         self.ctx_trans_aud = pd.DataFrame()
         self.ctx_trans_imu = pd.DataFrame()
         self.ctx_trans_mot = pd.DataFrame()
-        
+
         # Results
         self.master_mrt = pd.DataFrame()
         self.master_visual_trans = pd.DataFrame()
@@ -139,33 +156,62 @@ class ThreadSafeBuffer:
     def add_audio(self, samples, timestamp):
         with self.lock:
             data_points = [(timestamp, s) for s in samples]
-            # Feed all three audio buffers
+            # Feed both audio buffers
             self.audio_pipeline.extend(data_points)
-            self.audio_voice.extend(data_points)
             self.audio_transcribe.extend(data_points)
 
-            # Safety caps to prevent unbounded growth
-            if len(self.audio_voice) > 80000:
-                self.audio_voice = self.audio_voice[-80000:]
+            # Safety caps to prevent unbounded growth if the camera stalls
+            # (these buffers only drain when a video chunk forms)
             if len(self.audio_transcribe) > 80000:
                 self.audio_transcribe = self.audio_transcribe[-80000:]
+            if len(self.audio_pipeline) > 240000:
+                self.audio_pipeline = self.audio_pipeline[-240000:]
 
-            self.acc_audio_raw.extend(samples)
+            # Raw audio is only needed for the debug-mode .wav export
+            if self.debug:
+                self.acc_audio_raw.extend(samples)
 
     def add_motor(self, data):
         with self.lock:
             self.motor.append(data)
-            self.acc_motor.append(data)
+            if len(self.motor) > 2000:
+                self.motor = self.motor[-2000:]
 
     def add_imu(self, data):
         with self.lock:
             self.imu.append(data)
-            self.acc_imu.append(data)
+            if len(self.imu) > 2000:
+                self.imu = self.imu[-2000:]
 
     def add_visual(self, data, raw_img_array):
         with self.lock:
             self.visual.append(data)
-            self.acc_visual.append((data, raw_img_array)) 
+            # Raw frames are only needed for the debug-mode video/GIF export
+            if self.debug:
+                self.acc_visual.append((data, raw_img_array))
+
+    def append_csv(self, path, df, headers=None):
+        """Append a chunk to a CSV on disk under a dedicated lock (multi-writer safe).
+        Writes a header row only if the file doesn't exist yet."""
+        if df is None or df.empty:
+            return
+        with self.csv_lock:
+            file_exists = os.path.exists(path)
+            df.to_csv(path, mode='a', header=not file_exists, index=False)
+
+    def cap_masters(self):
+        """Trim in-RAM master DataFrames to bounded rolling windows.
+        Caller decides locking. No-op in debug mode (full history kept)."""
+        if self.debug:
+            return
+        if len(self.master_mrt) > MRT_CAP:
+            self.master_mrt = self.master_mrt.tail(MRT_CAP).reset_index(drop=True)
+        if len(self.master_decisions) > DECISIONS_CAP:
+            self.master_decisions = self.master_decisions.tail(DECISIONS_CAP).reset_index(drop=True)
+        if len(self.master_actions) > ACTIONS_CAP:
+            self.master_actions = self.master_actions.tail(ACTIONS_CAP).reset_index(drop=True)
+        if len(self.master_gen_motor) > GEN_MOTOR_CAP:
+            self.master_gen_motor = self.master_gen_motor.tail(GEN_MOTOR_CAP).reset_index(drop=True)
 
     def get_chunk_if_ready(self, chunk_size):
         with self.lock:
@@ -513,7 +559,9 @@ def process_chunk(chunk_data, buffer, chunk_index):
         else:
             trans_imu = pd.DataFrame()
 
-        buffer.master_visual_trans = pd.concat([buffer.master_visual_trans, trans_vis], ignore_index=True)
+        # Visual-transform history is only needed for the debug-mode annotated GIF
+        if buffer.debug:
+            buffer.master_visual_trans = pd.concat([buffer.master_visual_trans, trans_vis], ignore_index=True)
 
         # 3. Mart Layer
         def get_window(ctx, cur):
@@ -531,16 +579,23 @@ def process_chunk(chunk_data, buffer, chunk_index):
         if not mart_full.empty and new_count > 0:
             mart_chunk = mart_full.tail(new_count).copy()
             buffer.master_mrt = pd.concat([buffer.master_mrt, mart_chunk], ignore_index=True)
-            
+            # Stream this chunk's experiences to disk (production); RAM is capped below
+            if not buffer.debug:
+                buffer.append_csv(MART_CSV_FILE, mart_chunk)
+
             # 4. Decision & Execution
             imm_dec = d_engine.build_immediate_decisions(mart_chunk)
             if not imm_dec.empty:
                 buffer.master_decisions = pd.concat([buffer.master_decisions, imm_dec], ignore_index=True)
-                
+                if not buffer.debug:
+                    buffer.append_csv(DECISION_CSV_FILE, imm_dec)
+
                 actions = d_engine.build_decisions_to_actions(imm_dec, mart_chunk)
                 if not actions.empty:
                     buffer.master_actions = pd.concat([buffer.master_actions, actions], ignore_index=True)
-                    
+                    if not buffer.debug:
+                        buffer.append_csv(ACTION_CSV_FILE, actions)
+
                     # ==========================================================
                     # --- THE NEW EXECUTION ROUTER ---
                     # ==========================================================
@@ -566,6 +621,8 @@ def process_chunk(chunk_data, buffer, chunk_index):
                     motor_gen = e_engine.build_mrt_motor(motor_actions, start_frame_id=chunk_index*100)
                     if not motor_gen.empty:
                         buffer.master_gen_motor = pd.concat([buffer.master_gen_motor, motor_gen], ignore_index=True)
+                        if not buffer.debug:
+                            buffer.append_csv(GEN_MOTOR_CSV_FILE, motor_gen)
                         print(f"   ⚡ [Pipeline] MOTOR ACTION TRIGGERED: {len(motor_gen)} frames generated.")
                         
                         # Downsample 10Hz -> 4Hz to play back at correct speed
@@ -583,9 +640,17 @@ def process_chunk(chunk_data, buffer, chunk_index):
         buffer.ctx_trans_imu = trans_imu.tail(MART_WINDOW_SIZE)
         buffer.ctx_trans_mot = trans_mot.tail(MART_WINDOW_SIZE)
 
+        # Bound in-RAM history (no-op in debug mode)
+        buffer.cap_masters()
+
         dur = time.time() - t_start
-        print(f"[Pipeline] Chunk {chunk_index} ({new_count}f) processed in {dur:.3f}s")
-        
+        if buffer.debug:
+            print(f"[Pipeline] Chunk {chunk_index} ({new_count}f) processed in {dur:.3f}s")
+        elif chunk_index % HEARTBEAT_EVERY == 0:
+            # Lightweight production heartbeat — confirms RAM stays bounded
+            print(f"[Pipeline] chunk={chunk_index} | mrt_rows={len(buffer.master_mrt)} | "
+                  f"queue={BRAIN_COMMAND_QUEUE.qsize()} | {dur:.2f}s")
+
     except Exception as e:
         print(f"🛑 [Pipeline] Error in Chunk {chunk_index}: {e}")
         import traceback
@@ -595,10 +660,10 @@ def pipeline_consumer(stop_event, buffer):
     print("[Pipeline] Consumer thread started.")
     chunk_index = 0
     while not stop_event.is_set():
-        with buffer.lock:
-            # Debug using 'audio_pipeline'
-            print(f"DEBUG: Vis:{len(buffer.visual)} | Mot:{len(buffer.motor)} | IMU:{len(buffer.imu)} | Aud:{len(buffer.audio_pipeline)}", end='\r')
-        
+        if buffer.debug:
+            with buffer.lock:
+                print(f"DEBUG: Vis:{len(buffer.visual)} | Mot:{len(buffer.motor)} | IMU:{len(buffer.imu)} | Aud:{len(buffer.audio_pipeline)}", end='\r')
+
         chunk = buffer.get_chunk_if_ready(chunk_size=MART_WINDOW_SIZE)
         if chunk:
             process_chunk(chunk, buffer, chunk_index)
@@ -619,11 +684,26 @@ def pipeline_consumer(stop_event, buffer):
 # MAIN ENTRY POINT
 # ==============================================================================
 
-def run_data_collection(duration_unused, stop_event):
-    print("\n=== Starting Robot Stream Pipeline (Full Closed Loop) ===")
+def _init_streamed_csvs():
+    """Production mode: start each session with fresh CSV files.
+    Experience file is removed (first chunk writes its header); the audit files
+    are pre-created with headers so they always exist even if nothing fires."""
+    os.makedirs('recordings', exist_ok=True)
+    if os.path.exists(MART_CSV_FILE):
+        os.remove(MART_CSV_FILE)
+    pd.DataFrame(columns=DECISION_HEADERS).to_csv(DECISION_CSV_FILE, index=False)
+    pd.DataFrame(columns=ACTION_HEADERS).to_csv(ACTION_CSV_FILE, index=False)
+    pd.DataFrame(columns=GEN_MOTOR_HEADERS).to_csv(GEN_MOTOR_CSV_FILE, index=False)
+
+
+def run_data_collection(duration_unused, stop_event, debug=False):
+    mode = "DEBUG (full media + verbose)" if debug else "NORMAL (streamed CSVs, bounded RAM)"
+    print(f"\n=== Starting Robot Stream Pipeline (Full Closed Loop) — {mode} ===")
     d_engine.reset_voice_dedup()
 
-    stream_buffer = ThreadSafeBuffer()
+    stream_buffer = ThreadSafeBuffer(debug=debug)
+    if not debug:
+        _init_streamed_csvs()
     configure_camera(VIDEO_ESP32_CAM_IP_SET_RES, framesize_val=FRAMESIZE_VAL, quality_val=QUALITY_VAL)
     
     # Clear any old commands
@@ -652,7 +732,13 @@ def run_data_collection(duration_unused, stop_event):
     for t in threads:
         t.join(timeout=2.0)
         
-    print("=== Saving Data ===")
+    if not debug:
+        # Normal mode: experience + decision/action/motor CSVs were streamed to
+        # disk per chunk. Nothing to flush; heavy media is intentionally skipped.
+        print("=== Session complete. Streamed to recordings/*.csv (no media in normal mode) ===\n")
+        return
+
+    print("=== Saving Data (debug mode) ===")
     try:
         if stream_buffer.acc_audio_raw:
             raw_audio = np.array(stream_buffer.acc_audio_raw, dtype=np.int16)
@@ -671,15 +757,10 @@ def run_data_collection(duration_unused, stop_event):
                 pd.DataFrame(columns=headers).to_csv(path, index=False)
             else:
                 df.to_csv(path, index=False)
-        
-        save_csv_safe(stream_buffer.master_decisions, DECISION_CSV_FILE, 
-                      headers=['immed_id', 'timestamp', 'experience_id', 'rule_name', 'trigger_values', 'proposed_decision'])
-        
-        save_csv_safe(stream_buffer.master_actions, ACTION_CSV_FILE, 
-                      headers=['decision_id', 'timestamp', 'source_module', 'source_event_id', 'experience_id', 'decision_type', 'parameters'])
-        
-        save_csv_safe(stream_buffer.master_gen_motor, GEN_MOTOR_CSV_FILE, 
-                      headers=['frame_id', 'timestamp', 'left_pwm', 'right_pwm', 'arm_angle', 'source', 'decision_id'])
+
+        save_csv_safe(stream_buffer.master_decisions, DECISION_CSV_FILE, headers=DECISION_HEADERS)
+        save_csv_safe(stream_buffer.master_actions, ACTION_CSV_FILE, headers=ACTION_HEADERS)
+        save_csv_safe(stream_buffer.master_gen_motor, GEN_MOTOR_CSV_FILE, headers=GEN_MOTOR_HEADERS)
 
         if stream_buffer.acc_visual:
             print("Generating Video...")
@@ -688,7 +769,7 @@ def run_data_collection(duration_unused, stop_event):
             out = cv2.VideoWriter(VIDEO_FILE, cv2.VideoWriter_fourcc(*'mp4v'), FPS, (width, height))
             for f in frames: out.write(f)
             out.release()
-            
+
             if not stream_buffer.master_mrt.empty and not stream_buffer.master_visual_trans.empty:
                 print("Generating Annotated GIF...")
                 viz.create_annotated_video(stream_buffer.master_mrt, stream_buffer.master_visual_trans, VIDEO_FILE, ANNOTATED_VIDEO_FILE)

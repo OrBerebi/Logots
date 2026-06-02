@@ -273,6 +273,13 @@ def inject_reflective_decision(buffer, decision_type, reasoning, experience_id):
     with buffer.lock:
         buffer.master_actions = pd.concat([buffer.master_actions, actions_df], ignore_index=True)
         buffer.master_gen_motor = pd.concat([buffer.master_gen_motor, motor_gen], ignore_index=True)
+        buffer.cap_masters()
+
+    # Production mode: persist injected rows to disk (RAM mirror is capped above)
+    if not getattr(buffer, 'debug', False):
+        from .recording_module import ACTION_CSV_FILE, GEN_MOTOR_CSV_FILE
+        buffer.append_csv(ACTION_CSV_FILE, actions_df)
+        buffer.append_csv(GEN_MOTOR_CSV_FILE, motor_gen)
 
     # Downsample 10Hz motor frames to robot loop rate (4Hz)
     execution_ratio = int((1.0 / FPS) / 0.1)

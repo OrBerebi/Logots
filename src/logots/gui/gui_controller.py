@@ -28,6 +28,14 @@ class RecorderGUI:
         self.duration_entry.insert(0, "600") # Default to 10 minutes safety
         self.duration_entry.pack()
 
+        # Debug mode toggle: OFF = bounded RAM, streamed CSVs only (production).
+        # ON = keep full history in RAM and save audio/video/GIF + verbose logs.
+        self.debug_var = tk.BooleanVar(value=False)
+        self.debug_check = tk.Checkbutton(
+            root, text="Debug mode (save audio/video/GIF + verbose logs)",
+            variable=self.debug_var)
+        self.debug_check.pack()
+
         # Buttons
         self.start_button = tk.Button(root, text="Start Streaming", command=self.start_recording, bg="#ddffdd")
         self.start_button.pack(pady=5, ipadx=10)
@@ -123,22 +131,25 @@ class RecorderGUI:
         except ValueError:
             safety_duration = 600 # Default 10 mins
 
+        debug = self.debug_var.get()
+
         self.stop_event.clear()
         self.start_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
+        self.debug_check.config(state=tk.DISABLED)
         self.running = True
         self.start_time = time.time()
 
         # Start the collection thread
-        # Note: We pass safety_duration, but the new module largely ignores it 
+        # Note: We pass safety_duration, but the new module largely ignores it
         # in favor of the stop_event, though we can use it to auto-click stop if needed.
-        self.thread = threading.Thread(target=self.run_collection, args=(safety_duration,))
+        self.thread = threading.Thread(target=self.run_collection, args=(safety_duration, debug))
         self.thread.start()
-        
+
         self.update_stopwatch()
 
-    def run_collection(self, safety_duration):
-        rm.run_data_collection(safety_duration, self.stop_event)
+    def run_collection(self, safety_duration, debug):
+        rm.run_data_collection(safety_duration, self.stop_event, debug=debug)
 
         # When rm returns (after stop is pressed), reset UI.
         # The main loop may already be gone if the user closed the window,
@@ -157,6 +168,7 @@ class RecorderGUI:
         self.running = False
         self.start_button.config(state=tk.NORMAL)
         self.stop_button.config(state=tk.DISABLED)
+        self.debug_check.config(state=tk.NORMAL)
         self.timer_label.config(text="Stopped / Saved.")
 
     def update_stopwatch(self):
